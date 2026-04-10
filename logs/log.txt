@@ -1,0 +1,199 @@
+
+======================================================================
+RUN STARTED: 2026-04-10 17:09:16
+======================================================================
+2026-04-10 17:09:16 [INFO] === BENCHMARK MODE === 5 queries
+2026-04-10 17:09:16 [INFO] Embedder: đang khởi tạo...
+2026-04-10 17:09:16 [INFO] Embedder: text-embedding-3-small
+2026-04-10 17:09:16 [INFO] Data: đang load và chunk...
+2026-04-10 17:09:16 [INFO] Data: 6 files → 17 chunks
+2026-04-10 17:09:16 [INFO] Vector Store: đang ingest...
+2026-04-10 17:09:23 [INFO] Vector Store: backend=chroma, size=17
+2026-04-10 17:09:23 [INFO] Hybrid BM25 index: ✅ sẵn sàng
+2026-04-10 17:09:23 [INFO] Agent: LangGraph ReAct với model=o4-mini
+2026-04-10 17:09:23 [INFO] ============================================================
+2026-04-10 17:09:23 [INFO] [Q1] Đăng ký nhận văn bảng tố tụng online
+
+======================================================================
+RUN STARTED: 2026-04-10 17:09:45
+======================================================================
+2026-04-10 17:09:45 [INFO] === BENCHMARK MODE === 5 queries
+2026-04-10 17:09:45 [INFO] Embedder: đang khởi tạo...
+2026-04-10 17:09:45 [INFO] Embedder: text-embedding-3-small
+2026-04-10 17:09:45 [INFO] Data: đang load và chunk...
+2026-04-10 17:09:45 [INFO] Data: 6 files → 17 chunks
+2026-04-10 17:09:45 [INFO] Vector Store: đang ingest...
+2026-04-10 17:09:52 [INFO] Vector Store: backend=chroma, size=17
+2026-04-10 17:09:52 [INFO] Hybrid BM25 index: ✅ sẵn sàng
+2026-04-10 17:09:52 [INFO] Agent: LangGraph ReAct với model=o4-mini
+2026-04-10 17:09:52 [INFO] ============================================================
+2026-04-10 17:09:52 [INFO] [Q1] Đăng ký nhận văn bảng tố tụng online
+
+======================================================================
+RUN STARTED: 2026-04-10 17:11:17
+======================================================================
+2026-04-10 17:11:17 [INFO] === BENCHMARK MODE === 5 queries
+2026-04-10 17:11:17 [INFO] Embedder: đang khởi tạo...
+2026-04-10 17:11:17 [INFO] Embedder: text-embedding-3-small
+2026-04-10 17:11:17 [INFO] Data: đang load và chunk...
+2026-04-10 17:11:17 [INFO] Data: 6 files → 17 chunks
+2026-04-10 17:11:17 [INFO] Vector Store: đang ingest...
+2026-04-10 17:11:24 [INFO] Vector Store: backend=chroma, size=17
+2026-04-10 17:11:24 [INFO] Hybrid BM25 index: ✅ sẵn sàng
+2026-04-10 17:11:24 [INFO] Agent: LangGraph ReAct với model=o4-mini
+2026-04-10 17:11:24 [INFO] ============================================================
+2026-04-10 17:11:24 [INFO] [Q1] Đăng ký nhận văn bảng tố tụng online
+2026-04-10 17:11:42 [INFO] [A1] (17.1s)
+Dưới đây là quy trình Đăng ký nhận thông báo, văn bản tố tụng trực tuyến (bằng phương tiện điện tử) – trích theo cơ sở dữ liệu thủ tục hành chính:
+
+1. Đối tượng thực hiện  
+   - Cá nhân, tổ chức (không bao gồm doanh nghiệp, hợp tác xã) có nhu cầu nhận văn bản, thông báo tố tụng điện tử.  
+
+2. Cơ quan thực hiện  
+   – Tòa án nhân dân các cấp (Tòa án nhân dân tối cao, Tòa án nhân dân cấp cao, Tòa án nhân dân tỉnh/thành, quận/huyện).  
+
+3. Cách thức thực hiện (hoàn toàn trực tuyến)  
+   Bước 1: Đăng nhập vào  
+     • Cổng Dịch vụ công Quốc gia (https://dichvucong.gov.vn)  
+     hoặc  
+     • Cổng Dịch vụ công của Tòa án nhân dân (theo địa chỉ do từng Tòa án công bố).  
+   Bước 2: Chọn “Đăng ký nhận thông báo, văn bản tố tụng bằng phương tiện điện tử” và điền thông tin theo mẫu (tài khoản, email, số điện thoại, địa chỉ nhận thông báo…).  
+   Bước 3: Xác thực đăng ký (qua OTP/SMS hoặc Chữ ký số, tùy yêu cầu của cổng dịch vụ).  
+   Bước 4: Hoàn thành đăng ký. Hệ thống sẽ gửi thông báo xác nhận đã đăng ký thành công.  
+
+4. Thành phần hồ sơ  
+   – Thủ tục đăng ký thực hiện hoàn toàn trên hệ thống; không phải nộp hồ sơ giấy.  
+
+5. Quy trình tiếp nhận – thanh toán (khi có thông báo tạm ứng án phí)  
+   • Khi có văn bản tố tụng yêu cầu nộp tiền tạm ứng án phí, Hệ thống gửi ngay thông báo điện tử (qua portal, email, SMS).  
+   • Cá nhân, tổ chức chọn “Thanh toán trực tuyến án phí” trên portal và thực hiện thanh toán.  
+   • Hệ thống tự động chuyển biên lai điện tử đến Tòa án để thụ lý.  
+
+6. Nhận văn bản tố tụng  
+   – Sau khi Tòa án phát hành, cá nhân, tổ chức truy cập portal để xem, tải hoặc nhận bản sao điện tử theo địa chỉ đã đăng ký. Hệ thống cũng gửi SMS/email thông báo khi có văn bản mới.  
+
+7. Thời gian xử lý  
+   – Ngay sau khi hoàn tất đăng ký trên hệ thống (thường trong ngày).  
+
+8. Lệ phí  
+   – Miễn phí đăng ký; phí tạm ứng án phí, lệ phí Tòa án (nếu có) thực hiện theo văn bản quy định phí, lệ phí hiện hành.  
+
+9. Căn cứ pháp lý  
+   – Thông tư liên tịch hướng dẫn công tác áp dụng và tống đạt văn bản tố tụng bằng phương tiện điện tử của Tòa án nhân dân.  
+
+Nếu anh/chị cần hỗ trợ thêm (ví dụ: hướng dẫn cụ thể từng bước trên từng cổng dịch vụ công), vui lòng cho biết để được hướng dẫn chi tiết.
+2026-04-10 17:11:42 [INFO] ------------------------------------------------------------
+2026-04-10 17:11:42 [INFO] [Q2] Quyết định 1530-QĐ/VPTW là gì
+
+======================================================================
+RUN STARTED: 2026-04-10 17:12:42
+======================================================================
+2026-04-10 17:12:42 [INFO] === BENCHMARK MODE === 5 queries
+2026-04-10 17:12:42 [INFO] Embedder: đang khởi tạo...
+2026-04-10 17:12:43 [INFO] Embedder: text-embedding-3-small
+2026-04-10 17:12:43 [INFO] Data: đang load và chunk...
+2026-04-10 17:12:43 [INFO] Data: 6 files → 17 chunks
+2026-04-10 17:12:43 [INFO] Vector Store: đang ingest...
+2026-04-10 17:12:54 [INFO] Vector Store: backend=weaviate, size=17
+2026-04-10 17:12:54 [INFO] Hybrid BM25 index: ✅ sẵn sàng
+2026-04-10 17:12:54 [INFO] Agent: LangGraph ReAct với model=o4-mini
+2026-04-10 17:12:54 [INFO] ============================================================
+2026-04-10 17:12:54 [INFO] [Q1] Đăng ký nhận văn bảng tố tụng online
+2026-04-10 17:13:18 [INFO] [A1] (23.8s)
+Dưới đây là hướng dẫn thủ tục “Đăng ký nhận các thông báo, văn bản tố tụng bằng phương tiện điện tử” tại Tòa án (hay cơ quan tố tụng có thẩm quyền):
+
+1. Cơ sở pháp lý  
+   - Lệnh 21/2014/L-CTN ngày 04-12-2014 của Chủ tịch nước về áp dụng tố tụng điện tử  
+   - Nghị quyết 02/2012/NQ-HĐTP ngày 03-12-2012 của Hội đồng Thẩm phán TAND Tối cao  
+   - Nghị quyết 110/2015/QH13 ngày 27-11-2015 của Quốc hội  
+   - Nghị quyết 56/2010/QH12 ngày 24-11-2010 của Quốc hội  
+
+2. Đối tượng áp dụng  
+   Cá nhân, tổ chức có liên quan đến vụ án dân sự, hành chính có nhu cầu nhận văn bản tố tụng (quyết định, thông báo, bản án, quyết định…) qua email hoặc trên Hệ thống tố tụng điện tử.
+
+3. Hồ sơ – Mẫu đơn  
+   • Đơn “Đăng ký nhận thông báo, văn bản tố tụng bằng phương tiện điện tử” (theo mẫu của Tòa án)  
+   • Bản chính: 01 tờ đơn  
+   • Giấy tờ kèm theo (nếu có): bản sao CMND/CCCD hoặc hộ chiếu đối với cá nhân; giấy tờ chứng thực tư cách pháp nhân đối với tổ chức.
+
+4. Cách nộp hồ sơ  
+   a) Trực tuyến:  
+      – Truy cập Cổng Dịch vụ công Quốc gia (https://dichvucong.gov.vn/) hoặc Hệ thống Quản lý, dịch vụ tố tụng điện tử của Tòa án.  
+      – Đăng ký/đăng nhập tài khoản.  
+      – Chọn “Đăng ký nhận văn bản tố tụng điện tử”, tải lên đơn và giấy tờ liên quan, ấn “Nộp”.  
+   b) Trực tiếp:  
+      – Nộp 01 bộ hồ sơ tại bộ phận “Một cửa” của Tòa án cấp huyện/tỉnh có thẩm quyền.
+
+5. Thời hạn và lệ phí  
+   – Thời hạn giải quyết: Theo quy định tại Bộ luật Tố tụng Dân sự/Bộ luật Tố tụng Hành chính (thường không quá 03 ngày làm việc kể từ ngày nhận đủ hồ sơ hợp lệ).  
+   – Lệ phí: Miễn phí (theo quy định chung về thủ tục tố tụng điện tử).
+
+6. Kết quả  
+   Sau khi hồ sơ được tiếp nhận và xử lý, bạn sẽ:  
+   – Nhận email xác nhận đăng ký thành công;  
+   – Nhận thông báo, quyết định, bản án… dưới dạng file PDF gửi qua email hoặc xem trực tiếp trên Hệ thống tố tụng điện tử.
+
+Nếu bạn cần mẫu đơn hoặc hướng dẫn cụ thể hơn cho từng cấp tòa, vui lòng liên hệ trực tiếp với bộ phận “Một cửa” của Tòa án nơi mình khởi sự vụ việc.
+2026-04-10 17:13:18 [INFO] ------------------------------------------------------------
+2026-04-10 17:13:18 [INFO] [Q2] Quyết định 1530-QĐ/VPTW là gì
+2026-04-10 17:13:25 [INFO] [A2] (6.9s)
+Hiện tại trong cơ sở dữ liệu về thủ tục hành chính mà tôi có không tìm thấy thông tin liên quan đến “Quyết định 1530-QĐ/VPTW”. Bạn vui lòng kiểm tra lại số hiệu hoặc cung cấp thêm bối cảnh (ví dụ: ngành, lĩnh vực, cơ quan ban hành…) để tôi có thể hỗ trợ chính xác hơn.
+2026-04-10 17:13:25 [INFO] ------------------------------------------------------------
+2026-04-10 17:13:25 [INFO] [Q3] Cơ quan thực hiện lấy ý kiến của chi uỷ
+2026-04-10 17:13:45 [INFO] [A3] (20.3s)
+Theo quy định về thủ tục “Lấy ý kiến nhận xét của chi ủy, chi bộ đối với đảng viên thực hiện nhiệm vụ nơi cư trú qua dịch vụ công trực tuyến” (mã 2.002753), cơ quan thực hiện là:
+
+- Văn phòng Trung ương Đảng  
+- Thành ủy Hà Nội
+2026-04-10 17:13:45 [INFO] ------------------------------------------------------------
+2026-04-10 17:13:45 [INFO] [Q4] Ai có thể thực hiện đăng ký cấp bản án
+2026-04-10 17:13:55 [INFO] [A4] (9.7s)
+Theo quy định hiện hành, đối tượng được thực hiện đăng ký cấp bản sao trích lục bản án bao gồm:
+
+- Cá nhân là công dân Việt Nam.  
+- Tổ chức, doanh nghiệp (không bao gồm hợp tác xã).  
+
+Các đối tượng này có thể nộp trực tiếp tại cơ quan Tòa án nhân dân các cấp hoặc thực hiện trực tuyến qua Cổng Dịch vụ công Quốc gia/Cổng thông tin điện tử của Tòa án nhân dân.
+2026-04-10 17:13:55 [INFO] ------------------------------------------------------------
+2026-04-10 17:13:55 [INFO] [Q5] Các bước nộp đơn khởi kiện
+2026-04-10 17:14:10 [INFO] [A5] (15.2s)
+Dưới đây là các bước cơ bản để cá nhân, tổ chức nộp đơn khởi kiện (áp dụng cả hình thức trực tiếp và trực tuyến), căn cứ theo quy định của Bộ luật Tố tụng Dân sự và Bộ luật Tố tụng Hành chính:
+
+1. Chuẩn bị hồ sơ  
+   - Đơn khởi kiện (bản chính 01, bản sao kèm 01)  
+   - Tài liệu, chứng cứ kèm theo (bản sao 01; bản chính xuất trình khi cần)  
+   - Các tài liệu, giấy tờ khác (theo yêu cầu của loại vụ việc)
+
+2. Nộp hồ sơ khởi kiện  
+   a. Trực tiếp:  
+     • Nộp tại Tòa án nhân dân có thẩm quyền giải quyết vụ việc  
+     • Nhận biên nhận hồ sơ và lịch hẹn (nếu có)  
+   b. Trực tuyến:  
+     • Đăng nhập Cổng Dịch vụ công Quốc gia hoặc Cổng Dịch vụ công của Tòa án  
+     • Chọn “Nộp đơn khởi kiện trực tuyến” hoặc “Đăng ký nhận thông báo, văn bản tố tụng”  
+     • Tải lên bộ hồ sơ điện tử theo hướng dẫn
+
+3. Chờ Tòa án thụ lý và thông báo tạm ứng án phí  
+   - Trong thời hạn luật định, Tòa án xem xét đơn và:  
+     • Nếu đủ điều kiện: ra Thông báo nộp tiền tạm ứng án phí  
+     • Nếu không đủ điều kiện: thông báo yêu cầu chỉnh sửa, bổ sung hoặc trả lại đơn
+
+4. Nộp tiền tạm ứng án phí  
+   a. Trực tiếp:  
+     • Mang Thông báo và nộp tại cơ quan Thi hành án hoặc phòng kế toán của Tòa án  
+   b. Trực tuyến:  
+     • Truy cập mục “Thanh toán trực tuyến án phí” trên hệ thống Cổng Dịch vụ công  
+     • Thực hiện thanh toán theo hướng dẫn
+
+5. Nộp biên lai tạm ứng án phí cho Tòa án  
+   - Trực tiếp: nộp bản chính biên lai tại bộ phận Một cửa của Tòa án  
+   - Trực tuyến: hệ thống tự động chuyển biên lai cho Tòa án
+
+6. Nhận kết quả thụ lý và các văn bản tố tụng  
+   - Tòa án ra Quyết định thụ lý vụ án  
+   - Bạn nhận thông báo, giấy triệu tập, các văn bản tố tụng khác:  
+     • Trực tiếp tại Tòa án hoặc  
+     • Trực tuyến qua Cổng Dịch vụ công / tin nhắn SMS (nếu đăng ký)
+
+Lưu ý: Thời hạn giải quyết, mức tạm ứng án phí và mẫu đơn cụ thể căn cứ vào từng loại vụ việc (dân sự, hành chính…) và quy định hiện hành.
+2026-04-10 17:14:10 [INFO] ------------------------------------------------------------

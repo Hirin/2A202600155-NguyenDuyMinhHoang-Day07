@@ -28,7 +28,7 @@ from docx import Document
 
 # ================= CẤU HÌNH ĐƯỜNG DẪN =================
 IDS_DIR = Path("data/thutuchanhchinh/TTHC_IDs")
-TXT_OUTPUT_DIR = Path("data/thutuchanhchinh/txt")
+TXT_OUTPUT_DIR = Path("data/thutuchanhchinh/raw")
 TXT_PROGRESS_FILE = Path("data/thutuchanhchinh/master_download_progress.txt")
 
 # URL API

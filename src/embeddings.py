@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 
 LOCAL_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+LMSTUDIO_EMBEDDING_MODEL = os.getenv("LMSTUDIO_EMBEDDING_MODEL", "vietlegal-harrier-0.6b")
 EMBEDDING_PROVIDER_ENV = "EMBEDDING_PROVIDER"
 
 
@@ -56,6 +58,32 @@ class OpenAIEmbedder:
     def __call__(self, text: str) -> list[float]:
         response = self.client.embeddings.create(model=self.model_name, input=text)
         return [float(value) for value in response.data[0].embedding]
+
+
+class LMStudioEmbedder:
+    """LM Studio embedder dùng official Python SDK (lmstudio package).
+
+    Kết nối trực tiếp với LM Studio app qua IPC socket.
+    Không cần bật Server tab — chỉ cần app đang mở và model được load.
+
+    Usage (in .env):
+        EMBEDDING_PROVIDER=lmstudio
+        LMSTUDIO_EMBEDDING_MODEL=vietlegal-harrier-0.6b
+    """
+
+    def __init__(self, model_name: str = LMSTUDIO_EMBEDDING_MODEL) -> None:
+        import lmstudio as lms
+
+        self.model_name = model_name
+        self._backend_name = f"lmstudio-sdk:{model_name}"
+        self._model = lms.embedding_model(model_name)
+
+    def __call__(self, text: str) -> list[float]:
+        result = self._model.embed(text)
+        # SDK trả về list hoặc numpy array tuỳ version
+        if hasattr(result, "tolist"):
+            return result.tolist()
+        return [float(v) for v in result]
 
 
 _mock_embed = MockEmbedder()
