@@ -1,0 +1,218 @@
+[
+  {
+    "id": "exact_01",
+    "category": "exact_lookup",
+    "query": "Thủ tục mã 1.00309 gồm những giấy tờ gì?",
+    "expected_ma_thu_tuc": "1.00309",
+    "expected_section": "thanh_phan_ho_so",
+    "expected_status": "grounded",
+    "gold_keywords": ["đơn đề nghị", "giấy chứng nhận đăng ký doanh nghiệp"]
+  },
+  {
+    "id": "exact_02",
+    "category": "exact_lookup",
+    "query": "Phí lệ phí thủ tục 1.00309 là bao nhiêu?",
+    "expected_ma_thu_tuc": "1.00309",
+    "expected_section": "phi_le_phi",
+    "expected_status": "grounded",
+    "gold_keywords": ["phí", "lệ phí"]
+  },
+  {
+    "id": "exact_03",
+    "category": "exact_lookup",
+    "query": "Thời hạn giải quyết thủ tục 3.000163?",
+    "expected_ma_thu_tuc": "3.000163",
+    "expected_section": "thoi_han_giai_quyet",
+    "expected_status": "grounded",
+    "gold_keywords": ["ngày"]
+  },
+  {
+    "id": "exact_04",
+    "category": "exact_lookup",
+    "query": "Trình tự thực hiện thủ tục 2.002753?",
+    "expected_ma_thu_tuc": "2.002753",
+    "expected_section": "trinh_tu_thuc_hien",
+    "expected_status": "grounded",
+    "gold_keywords": ["bước"]
+  },
+  {
+    "id": "exact_05",
+    "category": "exact_lookup",
+    "query": "Cơ quan thực hiện thủ tục 3.000164 là gì?",
+    "expected_ma_thu_tuc": "3.000164",
+    "expected_section": "co_quan_thuc_hien",
+    "expected_status": "grounded",
+    "gold_keywords": ["cơ quan"]
+  },
+  {
+    "id": "multi_01",
+    "category": "multi_field",
+    "query": "Thủ tục 1.00309: phí, thời hạn và hồ sơ cần nộp?",
+    "expected_ma_thu_tuc": "1.00309",
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["phí", "thời hạn", "hồ sơ"]
+  },
+  {
+    "id": "multi_02",
+    "category": "multi_field",
+    "query": "Đăng ký nhận văn bảng tố tụng cần giấy tờ gì và thời gian bao lâu?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["giấy tờ", "thời hạn"]
+  },
+  {
+    "id": "multi_03",
+    "category": "multi_field",
+    "query": "Quy trình và điều kiện đăng ký kinh doanh nhập khẩu ô tô?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["trình tự", "điều kiện"]
+  },
+  {
+    "id": "multi_04",
+    "category": "multi_field",
+    "query": "Cách thức nộp và kết quả thủ tục 2.002768?",
+    "expected_ma_thu_tuc": "2.002768",
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["nộp", "kết quả"]
+  },
+  {
+    "id": "multi_05",
+    "category": "multi_field",
+    "query": "Thủ tục 3.000165 yêu cầu điều kiện gì và ai là đối tượng thực hiện?",
+    "expected_ma_thu_tuc": "3.000165",
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["yêu cầu", "điều kiện", "đối tượng"]
+  },
+  {
+    "id": "meta_01",
+    "category": "metadata_sensitive",
+    "query": "Các thủ tục của Tòa án Nhân dân cho công dân?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["Tòa án"]
+  },
+  {
+    "id": "meta_02",
+    "category": "metadata_sensitive",
+    "query": "Thủ tục thuộc Văn phòng Trung ương Đảng?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["Văn phòng Trung ương"]
+  },
+  {
+    "id": "meta_03",
+    "category": "metadata_sensitive",
+    "query": "Thủ tục của Bộ Công Thương liên quan đến xuất nhập khẩu?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["xuất nhập khẩu", "Bộ Công Thương"]
+  },
+  {
+    "id": "meta_04",
+    "category": "metadata_sensitive",
+    "query": "Có bao nhiêu thủ tục dành cho doanh nghiệp?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "grounded",
+    "gold_keywords": ["doanh nghiệp"]
+  },
+  {
+    "id": "meta_05",
+    "category": "metadata_sensitive",
+    "query": "Thủ tục nào liên quan đến Quyết định 1530-QĐ/VPTW?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": "can_cu_phap_ly",
+    "expected_status": "grounded",
+    "gold_keywords": ["1530", "quyết định"]
+  },
+  {
+    "id": "conflict_01",
+    "category": "legal_recency",
+    "query": "Căn cứ pháp lý mới nhất cho thủ tục nhập khẩu ô tô?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": "can_cu_phap_ly",
+    "expected_status": "grounded",
+    "gold_keywords": ["nghị định", "thông tư"]
+  },
+  {
+    "id": "conflict_02",
+    "category": "legal_recency",
+    "query": "Nghị định nào quy định thủ tục 1.00309?",
+    "expected_ma_thu_tuc": "1.00309",
+    "expected_section": "can_cu_phap_ly",
+    "expected_status": "grounded",
+    "gold_keywords": ["nghị định"]
+  },
+  {
+    "id": "conflict_03",
+    "category": "legal_recency",
+    "query": "Thủ tục 2.002753 được ban hành theo quyết định nào?",
+    "expected_ma_thu_tuc": "2.002753",
+    "expected_section": "can_cu_phap_ly",
+    "expected_status": "grounded",
+    "gold_keywords": ["quyết định"]
+  },
+  {
+    "id": "conflict_04",
+    "category": "legal_recency",
+    "query": "Thông tư hướng dẫn thủ tục 3.000163?",
+    "expected_ma_thu_tuc": "3.000163",
+    "expected_section": "can_cu_phap_ly",
+    "expected_status": "grounded",
+    "gold_keywords": ["thông tư"]
+  },
+  {
+    "id": "abstain_01",
+    "category": "abstention",
+    "query": "Thủ tục xin visa đi Mỹ?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "insufficient",
+    "gold_keywords": []
+  },
+  {
+    "id": "abstain_02",
+    "category": "abstention",
+    "query": "Cách nấu phở bò Hà Nội?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "insufficient",
+    "gold_keywords": []
+  },
+  {
+    "id": "abstain_03",
+    "category": "abstention",
+    "query": "Bitcoin hôm nay giá bao nhiêu?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "insufficient",
+    "gold_keywords": []
+  },
+  {
+    "id": "abstain_04",
+    "category": "abstention",
+    "query": "Luật lao động Nhật Bản quy định gì về làm thêm giờ?",
+    "expected_ma_thu_tuc": null,
+    "expected_section": null,
+    "expected_status": "insufficient",
+    "gold_keywords": []
+  },
+  {
+    "id": "abstain_05",
+    "category": "abstention",
+    "query": "Thủ tục mã 99.99999 gồm những gì?",
+    "expected_ma_thu_tuc": "99.99999",
+    "expected_section": null,
+    "expected_status": "insufficient",
+    "gold_keywords": []
+  }
+]
