@@ -135,5 +135,10 @@ class LlamaCppEmbedder:
         payload = self._build_payload(text)
 
         resp = requests.post(url, json=payload, timeout=30)
+        if resp.status_code == 400:
+            # Most likely context length overflow, recursive truncate
+            half_len = max(len(text) // 2, 100)
+            return self._embed(text[:half_len])
+            
         resp.raise_for_status()
         return self._parse_response(resp.json())

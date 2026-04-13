@@ -55,9 +55,13 @@ def main():
         except Exception as e:
             print(f"  ⚠️ Lỗi parse file {file_path.name}: {e}")
 
-    print(f"🧠 Đang đẩy ({len(chunks)} chunks) lên Weaviate Cloud (có thể mất nhiều thời gian nếu dùng model OpenAI)...")
+    print(f"🧠 Đang đẩy ({len(chunks)} chunks) lên Weaviate Cloud theo từng lô (batch)...")
     try:
-        store.add_documents(chunks)
+        BATCH_SIZE = 500
+        for i in range(0, len(chunks), BATCH_SIZE):
+            batch = chunks[i:i+BATCH_SIZE]
+            print(f"  -> Uploading batch {i//BATCH_SIZE + 1} ({len(batch)} chunks)...")
+            store.add_documents(batch)
         print("✅ Hoàn tất lưu dữ liệu vào Weaviate!")
     except Exception as e:
         print(f"❌ Lỗi khi upload dữ liệu lên Weaviate: {e}")
