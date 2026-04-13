@@ -558,5 +558,337 @@ class TestIntegrationPipeline(unittest.TestCase):
             self.assertEqual(r["metadata"]["agency_folder"], "BoCongThuong")
 
 
+# ================================================================== #
+# 11. TTHC Parser Tests
+# ================================================================== #
+class TestTTHCParser(unittest.TestCase):
+    """Test parsing of TTHC markdown files."""
+
+    def test_parse_real_file(self):
+        from src.parsing.tthc_parser import TTHCParser
+        md_dir = DAY_DIR / "data" / "thutuchanhchinh" / "markdown_json"
+        sample = next(md_dir.rglob("*.md"), None)
+        self.assertIsNotNone(sample)
+
+        parser = TTHCParser()
+        doc = parser.parse_file(sample)
+
+        self.assertTrue(doc.doc_id)
+        self.assertTrue(doc.ma_thu_tuc)
+        self.assertTrue(doc.agency_folder)
+
+    def test_parse_sections(self):
+        from src.parsing.tthc_parser import TTHCParser
+        md_dir = DAY_DIR / "data" / "thutuchanhchinh" / "markdown_json"
+        sample = next(md_dir.rglob("*.md"), None)
+        self.assertIsNotNone(sample)
+
+        parser = TTHCParser()
+        doc = parser.parse_file(sample)
+
+        # Should have at least 1 section
+        self.assertGreater(len(doc.sections), 0)
+
+        # All sections have content
+        for s in doc.sections:
+            self.assertTrue(s.content.strip())
+            self.assertTrue(s.section_type)
+
+    def test_flat_metadata(self):
+        from src.parsing.tthc_parser import TTHCParser
+        md_dir = DAY_DIR / "data" / "thutuchanhchinh" / "markdown_json"
+        sample = next(md_dir.rglob("*.md"), None)
+        parser = TTHCParser()
+        doc = parser.parse_file(sample)
+
+        meta = doc.flat_metadata
+        self.assertIn("doc_id", meta)
+        self.assertIn("ma_thu_tuc", meta)
+        self.assertIn("agency_folder", meta)
+
+    def test_section_normalization(self):
+        from src.parsing.section_map import SECTION_MAP
+        # Should recognize Vietnamese headings
+        self.assertEqual(SECTION_MAP["thành phần hồ sơ"], "thanh_phan_ho_so")
+        self.assertEqual(SECTION_MAP["phí, lệ phí"], "phi_le_phi")
+        self.assertEqual(SECTION_MAP["thời hạn giải quyết"], "thoi_han_giai_quyet")
+
+
+# ================================================================== #
+# 12. Section Chunker Tests
+# ================================================================== #
+class TestTTHCSectionChunker(unittest.TestCase):
+
+    def _get_sample_doc(self):
+        from src.parsing.tthc_parser import TTHCParser
+        md_dir = DAY_DIR / "data" / "thutuchanhchinh" / "markdown_json"
+        sample = next(md_dir.rglob("*.md"), None)
+        return TTHCParser().parse_file(sample)
+
+    def test_chunk_produces_results(self):
+        from src.chunking.tthc_section_chunker import TTHCSectionChunker
+        doc = self._get_sample_doc()
+        chunker = TTHCSectionChunker(child_max_chars=800)
+        chunks = chunker.chunk(doc)
+        self.assertGreater(len(chunks), 0)
+
+    def test_has_parent_chunks(self):
+        from src.chunking.tthc_section_chunker import TTHCSectionChunker
+        doc = self._get_sample_doc()
+        chunks = TTHCSectionChunker(child_max_chars=800).chunk(doc)
+        parents = [c for c in chunks if c.is_parent]
+        self.assertGreater(len(parents), 0)
+
+    def test_children_reference_parents(self):
+        from src.chunking.tthc_section_chunker import TTHCSectionChunker
+        doc = self._get_sample_doc()
+        chunks = TTHCSectionChunker(child_max_chars=200).chunk(doc)
+        children = [c for c in chunks if not c.is_parent]
+        parent_ids = {c.chunk_id for c in chunks if c.is_parent}
+        for child in children:
+            self.assertIn(child.parent_id, parent_ids)
+
+    def test_chunks_carry_metadata(self):
+        from src.chunking.tthc_section_chunker import TTHCSectionChunker
+        doc = self._get_sample_doc()
+        chunks = TTHCSectionChunker().chunk(doc)
+        for chunk in chunks:
+            self.assertIn("ma_thu_tuc", chunk.metadata)
+            self.assertIn("section_type", chunk.metadata)
+            self.assertIn("chunk_type", chunk.metadata)
+
+
+# ================================================================== #
+# 13. Query Parser Tests
+# ================================================================== #
+class TestQueryParser(unittest.TestCase):
+
+    def setUp(self):
+        from src.query.query_parser import QueryParser
+        self.parser = QueryParser()
+
+    def test_extract_ma_thu_tuc(self):
+        parsed = self.parser.parse("Thủ tục 1.00309 thời hạn bao lâu?")
+        self.assertEqual(parsed.metadata_filter.get("ma_thu_tuc"), "1.00309")
+
+    def test_detect_section_intent(self):
+        parsed = self.parser.parse("phí lệ phí thủ tục này là bao nhiêu?")
+        self.assertEqual(parsed.section_intent, "phi_le_phi")
+
+    def test_detect_time_intent(self):
+        parsed = self.parser.parse("thời hạn giải quyết bao lâu?")
+        self.assertEqual(parsed.section_intent, "thoi_han_giai_quyet")
+
+    def test_detect_documents_intent(self):
+        parsed = self.parser.parse("hồ sơ cần nộp gồm những gì?")
+        self.assertEqual(parsed.section_intent, "thanh_phan_ho_so")
+
+    def test_extract_agency(self):
+        parsed = self.parser.parse("thủ tục của Bộ Công Thương")
+        self.assertEqual(parsed.metadata_filter.get("agency_folder"), "BoCongThuong")
+
+    def test_no_code_no_filter(self):
+        parsed = self.parser.parse("cách nộp đơn khởi kiện")
+        self.assertNotIn("ma_thu_tuc", parsed.metadata_filter)
+
+    def test_generates_variants(self):
+        parsed = self.parser.parse("thủ tục 1.00309 phí lệ phí bao nhiêu tiền")
+        self.assertIsInstance(parsed.query_variants, list)
+
+
+# ================================================================== #
+# 14. Augmentor Tests
+# ================================================================== #
+class TestAugmentor(unittest.TestCase):
+
+    def setUp(self):
+        from src.augmentation.augmentor import Augmentor
+        self.augmentor = Augmentor()
+
+    def test_build_prompt_returns_string(self):
+        evidence = [
+            {"content": "Phí 500.000 VNĐ", "score": 0.9, "metadata": {"ma_thu_tuc": "1.00309", "section_type": "phi_le_phi", "agency_folder": "BoCongThuong"}},
+        ]
+        prompt = self.augmentor.build_prompt("phí bao nhiêu?", evidence)
+        self.assertIsInstance(prompt, str)
+        self.assertIn("<system>", prompt)
+        self.assertIn("<context>", prompt)
+        self.assertIn("<question>", prompt)
+
+    def test_contains_evidence(self):
+        evidence = [
+            {"content": "Thời hạn 10 ngày", "score": 0.8, "metadata": {"ma_thu_tuc": "1.00309", "section_type": "thoi_han", "agency_folder": "X"}},
+        ]
+        prompt = self.augmentor.build_prompt("thời hạn?", evidence)
+        self.assertIn("Thời hạn 10 ngày", prompt)
+
+    def test_deduplication(self):
+        evidence = [
+            {"content": "Same content here " * 20, "score": 0.9, "metadata": {}},
+            {"content": "Same content here " * 20, "score": 0.8, "metadata": {}},
+            {"content": "Different content", "score": 0.7, "metadata": {}},
+        ]
+        deduped = self.augmentor._deduplicate(evidence)
+        self.assertEqual(len(deduped), 2)
+
+    def test_empty_evidence(self):
+        prompt = self.augmentor.build_prompt("test?", [])
+        self.assertIn("<context>", prompt)
+
+
+# ================================================================== #
+# 15. Self-check Tests
+# ================================================================== #
+class TestSelfChecker(unittest.TestCase):
+
+    def test_clean_response_passes(self):
+        from src.generation.self_check import SelfChecker
+        from src.generation.schemas import RAGResponse, RAGFacts, RAGStatus
+
+        checker = SelfChecker()
+        response = RAGResponse(
+            answer="Thời hạn là 10 ngày.",
+            facts=RAGFacts(ma_thu_tuc="1.00309", ten_thu_tuc="Test"),
+            citations=["[1.00309|thoi_han_giai_quyet]"],
+            status=RAGStatus.GROUNDED,
+        )
+        evidence = [{"content": "test", "metadata": {"ma_thu_tuc": "1.00309", "section_type": "thoi_han_giai_quyet"}}]
+        corrected, result = checker.check(response, evidence)
+        self.assertTrue(result.is_clean)
+
+    def test_phantom_citation_removed(self):
+        from src.generation.self_check import SelfChecker
+        from src.generation.schemas import RAGResponse, RAGStatus
+
+        checker = SelfChecker()
+        response = RAGResponse(
+            answer="Test answer",
+            citations=["[1.00309|phi_le_phi]", "[FAKE|FAKE]"],
+            status=RAGStatus.GROUNDED,
+        )
+        evidence = [{"content": "test", "metadata": {"ma_thu_tuc": "1.00309", "section_type": "phi_le_phi"}}]
+        corrected, result = checker.check(response, evidence)
+        self.assertNotIn("[FAKE|FAKE]", corrected.citations)
+        self.assertIn("[1.00309|phi_le_phi]", corrected.citations)
+
+    def test_empty_answer_fix(self):
+        from src.generation.self_check import SelfChecker
+        from src.generation.schemas import RAGResponse, RAGStatus
+
+        checker = SelfChecker()
+        response = RAGResponse(answer="", status=RAGStatus.GROUNDED)
+        corrected, result = checker.check(response, [])
+        self.assertEqual(corrected.status, RAGStatus.INSUFFICIENT)
+
+    def test_duplicate_citations_deduped(self):
+        from src.generation.self_check import SelfChecker
+        from src.generation.schemas import RAGResponse, RAGStatus
+
+        checker = SelfChecker()
+        response = RAGResponse(
+            answer="Test",
+            citations=["[1.00309|a]", "[1.00309|a]", "[1.00309|b]"],
+            status=RAGStatus.GROUNDED,
+        )
+        corrected, result = checker.check(response, [])
+        self.assertEqual(len(corrected.citations), len(set(corrected.citations)))
+
+
+# ================================================================== #
+# 16. RAG Schemas Tests
+# ================================================================== #
+class TestRAGSchemas(unittest.TestCase):
+
+    def test_response_to_dict(self):
+        from src.generation.schemas import RAGResponse, RAGStatus
+        resp = RAGResponse(answer="Hello", status=RAGStatus.GROUNDED)
+        d = resp.to_dict()
+        self.assertEqual(d["answer"], "Hello")
+        self.assertEqual(d["status"], "grounded")
+        self.assertIn("facts", d)
+        self.assertIn("citations", d)
+
+    def test_response_from_dict(self):
+        from src.generation.schemas import RAGResponse
+        data = {
+            "answer": "Test",
+            "facts": {"ma_thu_tuc": "1.00309", "ten_thu_tuc": "Test"},
+            "citations": ["[1.00309|a]"],
+            "status": "grounded",
+        }
+        resp = RAGResponse.from_dict(data)
+        self.assertEqual(resp.answer, "Test")
+        self.assertEqual(resp.facts.ma_thu_tuc, "1.00309")
+        self.assertEqual(resp.status.value, "grounded")
+
+    def test_insufficient_factory(self):
+        from src.generation.schemas import RAGResponse, RAGStatus
+        resp = RAGResponse.insufficient("no data")
+        self.assertEqual(resp.status, RAGStatus.INSUFFICIENT)
+        self.assertIn("no data", resp.answer)
+
+
+# ================================================================== #
+# 17. Fusion Algorithm Tests
+# ================================================================== #
+class TestFusionAlgorithms(unittest.TestCase):
+
+    def test_rrf_merges_lists(self):
+        from src.retrieval.fusion import reciprocal_rank_fusion
+        list1 = [{"content": "A", "score": 0.9}, {"content": "B", "score": 0.8}]
+        list2 = [{"content": "B", "score": 0.7}, {"content": "C", "score": 0.6}]
+        merged = reciprocal_rank_fusion([list1, list2])
+        contents = [m["content"] for m in merged]
+        # B appears in both lists → should rank higher
+        self.assertIn("B", contents)
+        self.assertEqual(len(merged), 3)
+
+    def test_mmr_returns_diverse(self):
+        from src.retrieval.fusion import mmr_rerank
+        candidates = [
+            {"content": "A", "embedding": [1.0, 0.0, 0.0], "score": 0.9},
+            {"content": "A copy", "embedding": [0.99, 0.01, 0.0], "score": 0.85},
+            {"content": "B", "embedding": [0.0, 1.0, 0.0], "score": 0.7},
+        ]
+        query_emb = [1.0, 0.0, 0.0]
+        # lambda=0.3 heavily favors diversity → should pick A then B (not A copy)
+        selected = mmr_rerank(candidates, query_emb, top_k=2, lambda_param=0.3)
+        contents = [s["content"] for s in selected]
+        self.assertIn("A", contents)
+        self.assertIn("B", contents)
+
+
+# ================================================================== #
+# 18. Benchmark Queries File Tests
+# ================================================================== #
+class TestBenchmarkQueries(unittest.TestCase):
+
+    def test_file_exists_and_valid_json(self):
+        import json
+        path = DAY_DIR / "tests" / "benchmark_queries.json"
+        self.assertTrue(path.exists())
+        queries = json.loads(path.read_text(encoding="utf-8"))
+        self.assertIsInstance(queries, list)
+        self.assertGreaterEqual(len(queries), 20)
+
+    def test_all_categories_present(self):
+        import json
+        path = DAY_DIR / "tests" / "benchmark_queries.json"
+        queries = json.loads(path.read_text(encoding="utf-8"))
+        categories = {q["category"] for q in queries}
+        for cat in ["exact_lookup", "multi_field", "metadata_sensitive", "legal_recency", "abstention"]:
+            self.assertIn(cat, categories, f"Missing category: {cat}")
+
+    def test_each_query_has_required_fields(self):
+        import json
+        path = DAY_DIR / "tests" / "benchmark_queries.json"
+        queries = json.loads(path.read_text(encoding="utf-8"))
+        for q in queries:
+            self.assertIn("id", q)
+            self.assertIn("query", q)
+            self.assertIn("category", q)
+            self.assertIn("expected_status", q)
+
+
 if __name__ == "__main__":
     unittest.main()
