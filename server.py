@@ -8,14 +8,20 @@ from pydantic import BaseModel
 
 # Initialize the pipeline
 from src.agent import KnowledgeBaseAgent
+from src.embeddings.base import get_embedder_by_name
+from src.retrieval.store import EmbeddingStore
 
 app = FastAPI(title="TTHC RAG API")
 
 # Initialize agent globally
-# We can lazy-load the agent to avoid startup delay if needed, 
-# but for now we initialize it at startup.
 try:
-    AGENT = KnowledgeBaseAgent()
+    print("Initializing embedding model...")
+    embedder = get_embedder_by_name()
+    print("Initializing vector store...")
+    store = EmbeddingStore(embedder=embedder)
+    print("Initializing RAG agent...")
+    AGENT = KnowledgeBaseAgent(store=store)
+    print("Agent initialized successfully.")
 except Exception as e:
     print(f"Warning: Could not initialize KnowledgeBaseAgent: {e}")
     AGENT = None

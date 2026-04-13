@@ -82,8 +82,29 @@ WEAVIATE_URL=https://...
 WEAVIATE_API_KEY=...
 ```
 
-### 3. Chạy Web App
+### 3. Trình tự chạy hệ thống (Các bước chuẩn bị Vector Data)
 
+RAG Agent cần dữ liệu text đã được vector hóa để tra cứu. Hãy chạy hệ thống theo **đúng thứ tự sau**:
+
+**Bước 3.1: Bật Embedding Server (Tùy chọn nếu dùng LLaMA.cpp)**
+Nếu bạn dùng model `mock` hoặc `openai`, bỏ qua bước này.
+Nếu dùng `llamacpp` (VietLegal-Harrier), khởi động local server trước tiên (ví dụ mở terminal riêng):
+```bash
+# Sẽ mất chút thời gian để tải model .gguf
+bash scripts/start_embedding_server.sh 
+# Quá trình này sẽ chiếm port 8086. Server sẵn sàng khi dòng "HTTP server listening" hiện ra.
+```
+
+**Bước 3.2: Nhúng dữ liệu (Chạy Indexing)**
+Chúng ta cần chunk/chia các tài liệu `.md` thủ tục thành đoạn nhỏ, biến chúng thành vector và lưu tập dữ liệu vào Weaviate.
+```bash
+# Đảm bảo WEAVIATE_URL và EMBEDDING_PROVIDER trong file .env đã cấu hình đúng
+python -m scripts.migrate_weaviate
+# Quá trình này sẽ đọc toàn bộ file ở `data/thutuchanhchinh/markdown_json`, tạo parent-child chunks và upload index.
+```
+
+**Bước 3.3: Khởi động hệ thống Web**
+Sau khi Agent đã kết nối được với Weaviate (chứa sẵn data), ta khởi động API Server.
 ```bash
 uvicorn server:app --reload
 ```
