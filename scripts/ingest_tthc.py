@@ -56,13 +56,18 @@ def main():
             print(f"  ⚠️ Lỗi parse file {file_path.name}: {e}")
 
     print(f"🧠 Đang đẩy ({len(chunks)} chunks) lên Vector Database theo từng lô (batch)...")
+    import time
+    start_db_time = time.time()
     try:
         BATCH_SIZE = 500
         for i in range(0, len(chunks), BATCH_SIZE):
             batch = chunks[i:i+BATCH_SIZE]
             print(f"  -> Uploading batch {i//BATCH_SIZE + 1} ({len(batch)} chunks)...")
             store.add_documents(batch)
-        print("✅ Hoàn tất lưu dữ liệu vào Vector Database!")
+            
+        elapsed = time.time() - start_db_time
+        speed = len(chunks) / elapsed if elapsed > 0 else 0
+        print(f"✅ Hoàn tất lưu dữ liệu vào Vector Database. Thời gian {elapsed:.2f}s (~{speed:.1f} chunks/giây).")
     except Exception as e:
         print(f"❌ Lỗi khi upload dữ liệu lên Database: {e}")
         sys.exit(1)
