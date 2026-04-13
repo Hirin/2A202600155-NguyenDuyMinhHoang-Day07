@@ -1,0 +1,77 @@
+name: RAG Evaluation
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'   # nightly at 2AM UTC
+  workflow_dispatch:
+
+env:
+  EMBEDDING_PROVIDER: mock
+  OPENAI_LLM_MODEL: gpt-4o-mini
+
+jobs:
+  # ============================================================
+  # PR pipeline — fast smoke test (~2 min)
+  # ============================================================
+  pr-test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install --system -r requirements.txt
+          uv pip install --system pytest
+
+      - name: Run unit tests
+        run: pytest tests/test_solution.py -v
+
+  # ============================================================
+  # Nightly pipeline — full benchmark (~15 min)
+  # ============================================================
+  nightly-eval:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install --system -r requirements.txt
+          uv pip install --system pytest
+
+      - name: Run unit tests
+        run: pytest tests/test_solution.py -v
+
+      - name: Run retrieval evaluation (mock)
+        run: python -m tests.eval_retrieval --subset 10
+
+      - name: Run RAG evaluation (mock)
+        run: python -m tests.eval_rag --subset 5
+
+      - name: Upload scores artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-scores
+          path: scores.json
+          retention-days: 30
