@@ -13,7 +13,7 @@ load_dotenv(override=False)
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Ingest TTHC markdown files into Weaviate")
-    parser.add_argument("--data-dir", type=str, default="data/thutuchanhchinh/markdown_json", help="Path to markdown data directory")
+    parser.add_argument("--data-dir", type=str, default="data/thutuchanhchinh/markdown_json/BoCongAn", help="Path to markdown data directory")
     parser.add_argument("--ids-dir", type=str, default="data/thutuchanhchinh/TTHC_IDs", help="Path to CSV IDs mapping directory")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of documents to ingest (0 for all)")
     args = parser.parse_args()
@@ -69,6 +69,8 @@ def main():
         speed = len(chunks) / elapsed if elapsed > 0 else 0
         print(f"✅ Hoàn tất lưu dữ liệu vào Vector Database. Thời gian {elapsed:.2f}s (~{speed:.1f} chunks/giây).")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"❌ Lỗi khi upload dữ liệu lên Database: {e}")
         sys.exit(1)
 

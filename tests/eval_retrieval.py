@@ -151,9 +151,35 @@ def main():
     if args.subset:
         queries = queries[:args.subset]
 
-    print(f"[eval_retrieval] {len(queries)} queries, top_k={args.top_k}")
-    print("[eval_retrieval] ⚠️  Requires indexed store. Run main.py first.")
-
+    print(f"[eval_retrieval] Loading Pipeline to evaluate {len(queries)} queries (top_k={args.top_k})...")
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from src.embeddings.base import get_embedder_by_name
+    from src.retrieval.store import EmbeddingStore
+    
+    try:
+        embedder = get_embedder_by_name()
+        store = EmbeddingStore(embedder)
+        
+        print(f"🤖 Đang chạy bộ đánh giá Retrieval...")
+        metrics = evaluate_retrieval(store, queries, top_k=args.top_k)
+        
+        print("\n--- 📊 KẾT QUẢ ĐÁNH GIÁ ---")
+        print(f"Doc Hit @{args.top_k}:      {metrics['doc_hit_at_k'] * 100:.2f}%")
+        print(f"Section Hit @{args.top_k}:  {metrics['section_hit_at_k'] * 100:.2f}%")
+        print(f"Filter Precision:  {metrics['filter_precision'] * 100:.2f}%")
+        print(f"Trung bình trùng lặp: {metrics['avg_duplicate_ratio'] * 100:.2f}%\n")
+        
+        # Print failure cases
+        print("Chi tiết:")
+        for res in metrics["per_query"]:
+            status = "✅" if res["doc_hit"] else "❌"
+            print(f"  {status} Query ID {res['id']:<15} | Section: {'✅' if res['section_hit'] else '❌'} | Số KQ: {res['num_results']}")
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"❌ Lỗi khi đánh giá: {e}")
 
 if __name__ == "__main__":
     main()
