@@ -107,6 +107,13 @@ class LlamaCppEmbedder:
         # OpenAI-compatible format
         if "data" in data and isinstance(data["data"], list):
             emb = data["data"][0].get("embedding", [])
+            if not isinstance(emb, list):
+                raise ValueError(f"Invalid embedding array: {emb}")
+            
+            # Handle buggy llama-server responses where array elements are None
+            if len(emb) > 0 and emb[0] is None:
+                raise ValueError("llama-server returned None inside the embedding array (context overflow or crash)")
+                
             return [float(v) for v in emb]
 
         # Legacy format(s)
@@ -141,4 +148,12 @@ class LlamaCppEmbedder:
             return self._embed(text[:half_len])
             
         resp.raise_for_status()
-        return self._parse_response(resp.json())
+        try:
+            return self._parse_response(resp.json())
+        except ValueError as e:
+            if "None inside the embedding array" in str(e):
+                if len(text) <= 100:
+                    raise RuntimeError("llama-server failed to embed even a 100-character string (returned None). Please restart the llama-server completely.")
+                half_len = max(len(text) // 2, 100)
+                return self._embed(text[:half_len])
+            raise e
