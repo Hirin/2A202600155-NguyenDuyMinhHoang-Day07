@@ -48,11 +48,18 @@ class EmbeddingStore:
 
     def __init__(
         self,
-        collection_name: str = "documents",
-        embedding_fn: Callable[[str], list[float]] | None = None,
+        embedder,
+        collection_name: str | None = None,
     ) -> None:
-        self._embedding_fn = embedding_fn or _mock_embed
-        self._collection_name = collection_name.replace("-", "_").replace(" ", "_")
+        self._embedding_fn = embedder
+        if collection_name is None:
+            backend_name = getattr(embedder, "_backend_name", "unknown")
+            import re
+            # Weaviate collections must start with a capital letter and only contain letters/numbers/underscores
+            backend_name = re.sub(r'[^a-zA-Z0-9_]', '_', backend_name)
+            collection_name = f"Docs_{backend_name}"
+            
+        self._collection_name = collection_name
         self._store: list[dict[str, Any]] = []   # in-memory records
         self._bm25 = None                         # BM25 index (in-memory always)
         self._bm25_docs: list[dict] = []          # parallel list of records for BM25

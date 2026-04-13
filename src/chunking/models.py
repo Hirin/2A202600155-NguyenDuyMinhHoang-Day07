@@ -27,6 +27,10 @@ class ParentChildChunk:
     is_parent: bool = False     # True if this chunk IS the parent record
 
     @property
+    def id(self) -> str:
+        return self.chunk_id
+
+    @property
     def section_type(self) -> str:
         return self.metadata.get("section_type", "unknown")
 

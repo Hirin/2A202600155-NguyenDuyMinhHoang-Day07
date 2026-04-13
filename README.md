@@ -95,18 +95,18 @@ bash scripts/start_embedding_server.sh
 # Quá trình này sẽ chiếm port 8086. Server sẵn sàng khi dòng "HTTP server listening" hiện ra.
 ```
 
-**Bước 3.2: Nhúng dữ liệu (Chạy Indexing)**
-Chúng ta cần chunk/chia các tài liệu `.md` thủ tục thành đoạn nhỏ, biến chúng thành vector và lưu tập dữ liệu vào Weaviate.
+**Bước 3.2: Nhúng dữ liệu (Chạy Indexing) để upload Vector**
+Dữ liệu gốc hiện chỉ ở dạng chữ (file .md). Ta phải cắt nhỏ (chunk) và convert thành Vector, upload lên Weaviate. Script sẽ *tự động* tạo bảng (collection) mới với tên gắn theo model bạn dùng (VD: `Docs_llamacpp...`) để tránh lỗi đụng chạm chiều (dimensions):
 ```bash
 # Đảm bảo WEAVIATE_URL và EMBEDDING_PROVIDER trong file .env đã cấu hình đúng
-python -m scripts.migrate_weaviate
-# Quá trình này sẽ đọc toàn bộ file ở `data/thutuchanhchinh/markdown_json`, tạo parent-child chunks và upload index.
+.venv/bin/python scripts/ingest_tthc.py
+# Xóa flag --limit để upload toàn bộ 5,553 file. Có thể mất thời gian nếu máy yếu.
 ```
 
 **Bước 3.3: Khởi động hệ thống Web**
-Sau khi Agent đã kết nối được với Weaviate (chứa sẵn data), ta khởi động API Server.
+Sau khi Agent đã kết nối được với Weaviate (chứa sẵn data), ta chạy API Server:
 ```bash
-uvicorn server:app --reload
+.venv/bin/uvicorn server:app --reload
 ```
 
 Mở trình duyệt: **http://localhost:8000**

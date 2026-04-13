@@ -28,3 +28,28 @@ class EmbedderProtocol(Protocol):
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of passages/documents. No instruction prefix."""
         ...
+
+def get_embedder_by_name() -> EmbedderProtocol:
+    """Factory to instantiate the correct embedder based on EMBEDDING_PROVIDER in .env"""
+    import os
+    provider = os.getenv("EMBEDDING_PROVIDER", "mock").lower()
+    
+    if provider == "openai":
+        from .openai_embed import OpenAIEmbedder
+        return OpenAIEmbedder()
+    elif provider == "llamacpp":
+        # Check if they have the module llamacpp.py (vietlegal harrier wrapper)
+        from .llamacpp import LlamaCppEmbedder
+        url = os.getenv("LLAMACPP_SERVER_URL", "http://localhost:8086")
+        return LlamaCppEmbedder(server_url=url)
+    elif provider == "lmstudio":
+        from .lmstudio import LMStudioEmbedder
+        url = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
+        model = os.getenv("LMSTUDIO_EMBEDDING_MODEL", "vietlegal-harrier-0.6b")
+        return LMStudioEmbedder(base_url=url, model_name=model)
+    elif provider == "local":
+        from .local import LocalEmbedder
+        return LocalEmbedder()
+    else:
+        from .mock import MockEmbedder
+        return MockEmbedder()
