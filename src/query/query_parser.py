@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import csv
+import glob
 from dataclasses import dataclass, field
 
 from ..parsing.section_map import SECTION_MAP
@@ -102,6 +104,17 @@ class QueryParser:
                 suffix = no_dot_match.group(2).rstrip('0')
                 metadata_filter["ma_thu_tuc"] = f"{prefix}.{suffix}"
                 clean = clean.replace(no_dot_match.group(0), "").strip()
+
+        # 1b. Exact or partial procedure name match
+        if "ma_thu_tuc" not in metadata_filter:
+            q_lower = original.lower()
+            for name, code in self._name_map:
+                if len(name) > 10 and name in q_lower:
+                    # Enforce word boundaries for safety
+                    if re.search(rf"\b{re.escape(name)}\b", q_lower, re.UNICODE):
+                        metadata_filter["ma_thu_tuc"] = code
+                        # We don't remove the name from clean query because LLM needs it
+                        break
 
         # 2. Extract agency
         for agency_name, folder in _AGENCY_MAP.items():

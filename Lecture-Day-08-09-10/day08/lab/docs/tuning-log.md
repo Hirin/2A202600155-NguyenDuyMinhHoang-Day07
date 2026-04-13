@@ -2,6 +2,8 @@
 
 > A/B Rule: Chỉ đổi MỘT biến mỗi lần.
 > Nguyễn Duy Minh Hoàng — 2A202600155
+> 
+> *Ghi chú: Việc quyết tâm áp dụng dataset TTHC ngoài đời thực (thay vì các dataset mẫu thông thường) đòi hỏi phải code thêm script cào dữ liệu (crawler) cho 5,553 bài. Khâu chuẩn bị Data này đã đẩy tiến độ Tuning lùi lại đáng kể so với các nhóm khác, nhưng bù lại làm bật lên được nhiều "góc khuất" thú vị của hệ thống RAG khi xử lý dữ liệu phức tạp.*
 
 ---
 

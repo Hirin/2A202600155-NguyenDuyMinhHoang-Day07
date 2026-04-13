@@ -17,7 +17,9 @@
 ```
 
 **Mô tả ngắn gọn:**
-Hệ thống TTHC Assistant là trợ lý tra cứu thủ tục hành chính Việt Nam, phục vụ công dân và cán bộ hành chính. Hệ thống sử dụng kiến trúc **metadata-first RAG** với khả năng lọc theo mã thủ tục, cơ quan thực hiện, và nhận diện section intent (phí, thời hạn, hồ sơ, ...) để trả lời chính xác từng phần cụ thể của thủ tục. Pipeline kết hợp Vector Search + BM25 qua Reciprocal Rank Fusion, với section-aware re-ranking để đảm bảo đúng section được ưu tiên.
+Hệ thống TTHC Assistant là trợ lý tra cứu thủ tục hành chính Việt Nam, phục vụ công dân và cán bộ hành chính. Khác biệt lớn nhất của dự án này là việc **tự xây dựng một script cào data** để thu thập hơn 5,553 bộ dữ liệu TTHC thực tế từ API dichvucong.gov.vn thay vì dùng dataset có sẵn. Việc cất công cào và xử lý dataset mới này khiến tiến độ ban đầu bị chậm lại đôi chút so với các nhóm dùng data chuẩn, nhưng bù lại mang đến tính ứng dụng thực tiễn cao độ.
+
+Hệ thống sử dụng kiến trúc **metadata-first RAG** với khả năng lọc theo mã thủ tục, cơ quan thực hiện, và nhận diện section intent (phí, thời hạn, hồ sơ, ...) để trả lời chính xác từng phần cụ thể của thủ tục. Pipeline kết hợp Vector Search + BM25 qua Reciprocal Rank Fusion, với section-aware re-ranking để đảm bảo đúng section được ưu tiên.
 
 ---
 

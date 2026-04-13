@@ -12,13 +12,13 @@
 
 Tôi chịu trách nhiệm **toàn bộ pipeline** từ indexing đến evaluation, đóng vai trò Tech Lead kiêm Retrieval Owner. Cụ thể:
 
-- **Sprint 1 (Indexing)**: Xây dựng pipeline crawl → parse → chunk → embed → store. Crawler thu thập 5,553 tài liệu TTHC từ API dichvucong.gov.vn. Parser tách metadata JSON và section từ markdown. Chunker dùng chiến lược parent-child: mỗi `##` heading = 1 parent, tách child ở 1,200 chars với 200 chars overlap. Embedding dùng OpenAI `text-embedding-3-small` batch mode (500 texts/request), đạt throughput ~105 chunks/giây.
+- **Sprint 1 (Indexing)**: Xây dựng pipeline crawl → parse → chunk → embed → store. Khác với các nhóm khác sử dụng dataset chuẩn có sẵn của môn học, tôi đã quyết định apply một bộ data hoàn toàn mới (Thủ tục hành chính thực tế) hòng giải quyết bài toán thật. Tôi đã tự viết script cào data (crawler) chạy đa luồng để thu thập 5,553 tài liệu TTHC từ API dichvucong.gov.vn. Việc tự thân vận động quyết định đổi data mới và tốn thời gian code script crawler này đã khiến tiến độ tổng thể của tôi bị chậm đáng kể so với mặt bằng chung các nhóm khác.
 
 - **Sprint 2 (Baseline)**: Implement `KnowledgeBaseAgent` với dense-only search trên Weaviate Cloud. Kết quả: Doc Hit @3 = 100% nhưng Section Hit @3 chỉ 40%.
 
 - **Sprint 3 (Variant)**: Phân tích root cause Section Hit thấp → implement 3 cải tiến: (1) Hybrid search (BM25 + Dense → RRF), (2) Sub-section detection trong chunker, (3) Section-aware re-ranking. Kết quả: Section Hit @3 tăng từ 40% → 100%.
 
-- **Sprint 4 (Eval)**: Chạy eval_retrieval.py với 5 benchmark queries tích hợp Agentic QueryParser. Điền architecture.md và tuning-log.md.
+- **Sprint 4 (Eval)**: Chạy eval_retrieval.py với benchmark queries tích hợp Agentic QueryParser. Điền architecture.md và tuning-log.md. Mặc dù xuất phát chậm hơn do vướng bận khâu cào data, nhưng chất lượng pipeline đầu ra xử lý được ngôn ngữ chuyên ngành phức tạp.
 
 ---
 
@@ -32,7 +32,7 @@ Tôi chịu trách nhiệm **toàn bộ pipeline** từ indexing đến evaluati
 
 ## 3. Điều tôi ngạc nhiên hoặc gặp khó khăn
 
-**Ngạc nhiên lớn nhất**: Section Hit 40% ở baseline **không phải lỗi retrieval**. Mất khá nhiều thời gian debug vì ban đầu cứ tưởng embedding model yếu. Thử đổi sang hybrid, thêm BM25, re-rank — vẫn 40%. Cuối cùng mới phát hiện root cause nằm ở **chunker**: DB đơn giản là không chứa chunk nào có `section_type = phi_le_phi` hay `can_cu_phap_ly` cho document 3.000391. Không có data → search không thể tìm ra, dù thuật toán có tốt đến mấy.
+**Ngạc nhiên lớn nhất**: Section Hit 40% ở baseline **không phải lỗi retrieval**. Mất khá nhiều thời gian debug vì ban đầu cứ tưởng embedding model yếu. Thử đổi sang hybrid, thêm BM25, re-rank — vẫn 40%. Cuối cùng mới phát hiện root cause nằm ở **chunker**: DB đơn giản là không chứa chunk nào có `section_type = phi_le_phi` hay `can_cu_phap_ly` cho document 3.000391. Không có data → search không thể tìm ra, dù thuật toán có tốt đến mấy. Sau khi fix logic tách paragraph ở chunker để giữ lại đầy đủ data, Section Hit đã đạt 100% tuyệt đối.
 
 **Khó khăn kỹ thuật**: QueryParser intent detection bị false positive. Query "Cơ quan nào thực hiện thủ tục 3.000391?" được detect thành `trinh_tu_thuc_hien` vì keyword "thủ tục" match. Giải pháp: chuyển từ count-based scoring sang **length-weighted scoring** — keyword dài hơn (cụ thể hơn) được ưu tiên. "cơ quan nào" (10 ký tự) thắng "thủ tục" (7 ký tự).
 
