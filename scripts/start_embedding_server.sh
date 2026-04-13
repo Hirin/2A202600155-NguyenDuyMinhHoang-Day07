@@ -17,12 +17,12 @@ set -euo pipefail
 PORT="${1:-8086}"
 
 echo "🚀 Starting VietLegal-Harrier embedding server on port $PORT..."
-echo "   Model: mradermacher/vietlegal-harrier-0.6b-GGUF:F16"
+echo "   Model: mradermacher/vietlegal-harrier-0.6b-GGUF:Q8_0"
 echo "   Endpoint: http://localhost:$PORT/v1/embeddings"
 echo ""
 
 llama-server \
-    -hf mradermacher/vietlegal-harrier-0.6b-GGUF:F16 \
+    -hf mradermacher/vietlegal-harrier-0.6b-GGUF:Q8_0 \
     --embedding \
     --port "$PORT" \
     --ctx-size 512 \

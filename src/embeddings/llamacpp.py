@@ -44,7 +44,7 @@ class LlamaCppEmbedder:
 
     def __init__(self, server_url: str | None = None) -> None:
         self.server_url = (server_url or LLAMACPP_SERVER_URL).rstrip("/")
-        self._backend_name = "llamacpp:vietlegal-harrier-0.6b-F16"
+        self._backend_name = "llamacpp:vietlegal-harrier-0.6b-Q8_0"
         self.dim = 1024
         self._endpoint: str | None = None  # auto-detected on first call
 
@@ -86,7 +86,7 @@ class LlamaCppEmbedder:
                 continue
         raise ConnectionError(
             f"llama-server not responding at {self.server_url}. "
-            "Start it with: llama-server -hf mradermacher/vietlegal-harrier-0.6b-GGUF:F16 "
+            "Start it with: llama-server -hf mradermacher/vietlegal-harrier-0.6b-GGUF:Q8_0 "
             "--embedding --port 8086"
         )
 
