@@ -48,7 +48,16 @@ class KnowledgeBaseAgent:
     ) -> None:
         self.store = store
         self._model_name = model
-        self._llm = ChatOpenAI(model=model, temperature=0)
+        
+        base_url = os.getenv("OPENAI_BASE_URL", None)
+        api_key = os.getenv("OPENAI_API_KEY", "dummy-local-key" if base_url else None)
+        
+        self._llm = ChatOpenAI(
+            model=model, 
+            temperature=0, 
+            api_key=api_key,
+            base_url=base_url
+        )
         self._parser = QueryParser()
         self._augmentor = Augmentor()
         self._checker = SelfChecker()
