@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--data-dir", type=str, default="data/thutuchanhchinh/markdown_json", help="Path to markdown data directory")
     parser.add_argument("--ids-dir", type=str, default="data/thutuchanhchinh/TTHC_IDs", help="Path to CSV IDs mapping directory")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of documents to ingest (0 for all)")
+    parser.add_argument("--clean", action="store_true", help="Xóa sạch collection trên Weaviate trước khi nhúng (tránh trùng lặp khi chạy đi chạy lại)")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
@@ -33,6 +34,26 @@ def main():
         from src.chunking.tthc_section_chunker import TTHCSectionChunker
         
         embedder = get_embedder_by_name()
+        
+        if args.clean:
+            # We must init client manually to delete or add a helper to EmbeddingStore
+            print("🧹 Đang dọn sạch Database cũ trên Weaviate...")
+            import weaviate
+            from weaviate.classes.init import Auth
+            url = os.getenv("WEAVIATE_URL", "")
+            key = os.getenv("WEAVIATE_API_KEY", "")
+            
+            client = weaviate.connect_to_weaviate_cloud(url, Auth.api_key(key))
+            import re
+            backend_name = getattr(embedder, "_backend_name", "unknown")
+            backend_name = re.sub(r'[^a-zA-Z0-9_]', '_', backend_name)
+            col_name = f"Docs_{backend_name}"
+            
+            if client.collections.exists(col_name):
+                client.collections.delete(col_name)
+                print(f"   Đã xóa collection: {col_name}")
+            client.close()
+            
         store = EmbeddingStore(embedder)
         tthc_parser = TTHCParser(ids_dir=ids_dir if ids_dir.exists() else None)
         chunker = TTHCSectionChunker(child_max_chars=1200, child_overlap=200)
