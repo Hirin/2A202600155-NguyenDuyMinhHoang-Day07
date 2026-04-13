@@ -128,7 +128,7 @@ class KnowledgeBaseAgent:
         """Run hybrid search with optional metadata filters."""
         if metadata_filter:
             return self.store.search_with_filter(
-                query, top_k=top_k, metadata_filter=metadata_filter
+                query, metadata_filter=metadata_filter, top_k=top_k,
             )
         return self.store.search(query, top_k=top_k)
 

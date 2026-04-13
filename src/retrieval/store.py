@@ -1,25 +1,39 @@
-"""EmbeddingStore with Hybrid Search (Vector + BM25 → Reciprocal Rank Fusion)."""
+"""EmbeddingStore with Hybrid Search (Vector + BM25 → Reciprocal Rank Fusion).
+
+Backend priority:
+    1. Weaviate Cloud/Local (env: WEAVIATE_URL + WEAVIATE_API_KEY)
+    2. ChromaDB (if installed)
+    3. In-memory fallback
+
+Search strategy:
+    - search()            → Hybrid = Vector + BM25, fused via RRF
+    - search_with_filter() → same Hybrid, with Weaviate/Chroma metadata pre-filter
+"""
 from __future__ import annotations
 
 import json
 import os
 import re
-from typing import Any, Callable
+from typing import Any
 
 from ..chunking.base import _dot
 from ..embeddings.mock import _mock_embed
 from ..models import Document
 
 
+# ------------------------------------------------------------------ #
+# Utilities
+# ------------------------------------------------------------------ #
+
 def _tokenize(text: str) -> list[str]:
-    """Simple tokenizer: lowercase + split on non-alphanumeric."""
+    """Simple tokenizer: lowercase + split on non-alphanumeric (supports Vietnamese)."""
     return re.findall(r"[a-zA-Z0-9\u00C0-\u024F\u1EA0-\u1EF9]+", text.lower())
 
 
 def _reciprocal_rank_fusion(
     ranked_lists: list[list[dict]], k: int = 60
 ) -> list[dict]:
-    """Merge N ranked lists via RRF. Each item must have 'content' key."""
+    """Merge N ranked lists via RRF.  Each item must have a 'content' key."""
     scores: dict[str, float] = {}
     items: dict[str, dict] = {}
 
@@ -34,9 +48,19 @@ def _reciprocal_rank_fusion(
     return merged
 
 
+def _batch_embed(embedder, texts: list[str]) -> list[list[float]]:
+    """Embed texts in batch if the embedder supports it, otherwise one by one."""
+    if hasattr(embedder, "embed_documents"):
+        return embedder.embed_documents(texts)
+    return [embedder(t) for t in texts]
+
+
+# ------------------------------------------------------------------ #
+# EmbeddingStore
+# ------------------------------------------------------------------ #
+
 class EmbeddingStore:
-    """
-    A hybrid vector + BM25 store for text chunks.
+    """Hybrid vector + BM25 store for text chunks.
 
     Backend priority:
         1. Weaviate (nếu có WEAVIATE_URL + WEAVIATE_API_KEY trong env)
@@ -52,32 +76,32 @@ class EmbeddingStore:
         collection_name: str | None = None,
     ) -> None:
         self._embedding_fn = embedder
+
+        # Derive collection name from embedder backend name
         if collection_name is None:
             backend_name = getattr(embedder, "_backend_name", "unknown")
-            import re
-            # Weaviate collections must start with a capital letter and only contain letters/numbers/underscores
             backend_name = re.sub(r'[^a-zA-Z0-9_]', '_', backend_name)
             collection_name = f"Docs_{backend_name}"
-            
+
         self._collection_name = collection_name
         self._store: list[dict[str, Any]] = []   # in-memory records
         self._bm25 = None                         # BM25 index (in-memory always)
-        self._bm25_docs: list[dict] = []          # parallel list of records for BM25
+        self._bm25_docs: list[dict] = []          # parallel list for BM25
         self._collection = None
         self._backend = "memory"
 
-        # --- Thử Weaviate trước ---
+        # --- Try Weaviate first ---
         weaviate_url = os.getenv("WEAVIATE_URL", "")
         weaviate_key = os.getenv("WEAVIATE_API_KEY", "")
         if weaviate_url and weaviate_key:
             try:
                 self._init_weaviate(weaviate_url, weaviate_key)
             except ImportError:
-                pass   # weaviate package not installed — silently use ChromaDB
+                pass   # weaviate package not installed
             except Exception as e:
-                print(f"[EmbeddingStore] Weaviate connection failed ({e}), using ChromaDB")
+                print(f"[EmbeddingStore] Weaviate connection failed ({e}), falling back")
 
-        # --- Thử ChromaDB nếu Weaviate không khả dụng ---
+        # --- Try ChromaDB if Weaviate unavailable ---
         if self._backend == "memory":
             try:
                 import chromadb
@@ -100,10 +124,8 @@ class EmbeddingStore:
                 auth_credentials=Auth.api_key(api_key),
             )
         else:
-            self._weaviate_client = weaviate.connect_to_local(
-                host="localhost",
-                port=8080
-            )
+            self._weaviate_client = weaviate.connect_to_local(host="localhost", port=8080)
+
         class_name = self._collection_name
         self._weaviate_class = class_name
         if not self._weaviate_client.collections.exists(class_name):
@@ -125,12 +147,13 @@ class EmbeddingStore:
     # Internal helpers
     # ------------------------------------------------------------------ #
     def _make_record(self, doc: Document) -> dict[str, Any]:
+        """Create an in-memory record with pre-computed embedding."""
         embedding = self._embedding_fn(doc.content)
         meta = dict(doc.metadata)
         meta["doc_id"] = doc.id
         return {"id": doc.id, "content": doc.content, "embedding": embedding, "metadata": meta}
 
-    def _search_records(self, query: str, records: list[dict[str, Any]], top_k: int) -> list[dict[str, Any]]:
+    def _vector_search_memory(self, query: str, records: list[dict[str, Any]], top_k: int) -> list[dict[str, Any]]:
         """In-memory dot-product search."""
         query_embedding = self._embedding_fn(query)
         scored = [
@@ -140,15 +163,44 @@ class EmbeddingStore:
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_k]
 
+    def _vector_search_weaviate(
+        self, query: str, top_k: int, filters=None
+    ) -> list[dict[str, Any]]:
+        """Run near_vector search on Weaviate with optional filters."""
+        query_vector = self._embedding_fn(query)
+        kwargs: dict[str, Any] = dict(
+            near_vector=query_vector, limit=top_k, return_metadata=["distance"],
+        )
+        if filters is not None:
+            kwargs["filters"] = filters
+
+        response = self._weaviate_collection.query.near_vector(**kwargs)
+        results = []
+        for obj in response.objects:
+            meta = json.loads(obj.properties.get("meta_json", "{}"))
+            score = 1.0 - (obj.metadata.distance or 0.0)
+            results.append({"content": obj.properties.get("content", ""), "score": score, "metadata": meta})
+        return results
+
+    def _vector_search_chroma(self, query: str, top_k: int) -> list[dict[str, Any]]:
+        """Run vector search on ChromaDB."""
+        query_embedding = self._embedding_fn(query)
+        n = min(top_k, self._collection.count())
+        if n == 0:
+            return []
+        results = self._collection.query(query_embeddings=[query_embedding], n_results=n)
+        return [
+            {"content": c, "score": 1 - results["distances"][0][i], "metadata": results["metadatas"][0][i]}
+            for i, c in enumerate(results["documents"][0])
+        ]
+
     def _bm25_search(self, query: str, top_k: int) -> list[dict[str, Any]]:
-        """BM25 keyword search over the in-memory BM25 index."""
+        """BM25 keyword search over the in-memory index."""
         if self._bm25 is None or not self._bm25_docs:
             return []
         tokens = _tokenize(query)
         scores = self._bm25.get_scores(tokens)
-        ranked = sorted(
-            enumerate(scores), key=lambda x: x[1], reverse=True
-        )[:top_k]
+        ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:top_k]
         return [
             {
                 "content": self._bm25_docs[i]["content"],
@@ -157,6 +209,20 @@ class EmbeddingStore:
             }
             for i, s in ranked if s > 0
         ]
+
+    def _bm25_search_filtered(self, query: str, doc_id: str, top_k: int) -> list[dict[str, Any]]:
+        """BM25 keyword search, restricted to a specific doc_id."""
+        if self._bm25 is None or not self._bm25_docs:
+            return []
+        tokens = _tokenize(query)
+        scores = self._bm25.get_scores(tokens)
+        filtered = []
+        for doc, score in zip(self._bm25_docs, scores):
+            meta = doc["metadata"]
+            if meta.get("doc_id") == doc_id or meta.get("ma_thu_tuc") == doc_id:
+                filtered.append({"content": doc["content"], "score": float(score), "metadata": meta})
+        filtered.sort(key=lambda x: x["score"], reverse=True)
+        return [r for r in filtered[:top_k] if r["score"] > 0]
 
     def _rebuild_bm25(self) -> None:
         """Rebuild the BM25 index from all stored docs (called after add_documents)."""
@@ -167,6 +233,14 @@ class EmbeddingStore:
         except ImportError:
             pass   # rank_bm25 not installed — degrade gracefully
 
+    def _hybrid_fuse(
+        self, vector_results: list[dict], bm25_results: list[dict], top_k: int,
+    ) -> list[dict[str, Any]]:
+        """Merge vector + BM25 results via RRF, or just return vector if BM25 empty."""
+        if bm25_results:
+            return _reciprocal_rank_fusion([vector_results, bm25_results])[:top_k]
+        return vector_results[:top_k]
+
     # ------------------------------------------------------------------ #
     # Public API
     # ------------------------------------------------------------------ #
@@ -174,9 +248,9 @@ class EmbeddingStore:
         """Embed and store documents; also indexes into BM25."""
         if self._backend == "weaviate":
             from weaviate.classes.data import DataObject
+            embeddings = _batch_embed(self._embedding_fn, [d.content for d in docs])
             objects = []
-            for doc in docs:
-                embed = self._embedding_fn(doc.content)
+            for doc, embed in zip(docs, embeddings):
                 meta = dict(doc.metadata)
                 meta["doc_id"] = doc.id
                 objects.append(DataObject(
@@ -184,29 +258,26 @@ class EmbeddingStore:
                                 "meta_json": json.dumps(meta, ensure_ascii=False)},
                     vector=embed,
                 ))
-                # Always build BM25 index regardless of vector backend
                 self._bm25_docs.append({"content": doc.content, "metadata": meta})
             self._weaviate_collection.data.insert_many(objects)
 
         elif self._backend == "chroma":
-            ids, documents, embeddings, metadatas = [], [], [], []
+            ids, documents, metadatas = [], [], []
             for doc in docs:
-                embed = self._embedding_fn(doc.content)
                 meta = dict(doc.metadata)
                 meta["doc_id"] = doc.id
-                
-                # ChromaDB only accepts str, int, float, bool.
+                # ChromaDB only accepts str, int, float, bool in metadata
                 for k in list(meta.keys()):
                     if meta[k] is None:
                         del meta[k]
                     elif isinstance(meta[k], (dict, list)):
                         meta[k] = json.dumps(meta[k], ensure_ascii=False)
-                        
                 ids.append(f"{doc.id}__{len(ids)}")
                 documents.append(doc.content)
-                embeddings.append(embed)
                 metadatas.append(meta)
                 self._bm25_docs.append({"content": doc.content, "metadata": meta})
+
+            embeddings = _batch_embed(self._embedding_fn, [d.content for d in docs])
             self._collection.add(ids=ids, documents=documents, embeddings=embeddings, metadatas=metadatas)
 
         else:
@@ -218,40 +289,53 @@ class EmbeddingStore:
         self._rebuild_bm25()
 
     def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        """Hybrid search: combine Vector + BM25 via Reciprocal Rank Fusion."""
-        # --- Vector results ---
+        """Hybrid search: Vector + BM25 fused via Reciprocal Rank Fusion."""
         if self._backend == "weaviate":
-            query_vector = self._embedding_fn(query)
-            response = self._weaviate_collection.query.near_vector(
-                near_vector=query_vector, limit=top_k, return_metadata=["distance"],
-            )
-            vector_results = []
-            for obj in response.objects:
-                meta = json.loads(obj.properties.get("meta_json", "{}"))
-                score = 1.0 - (obj.metadata.distance or 0.0)
-                vector_results.append({"content": obj.properties.get("content", ""), "score": score, "metadata": meta})
-
+            vector_results = self._vector_search_weaviate(query, top_k)
         elif self._backend == "chroma":
-            query_embedding = self._embedding_fn(query)
-            n = min(top_k, self._collection.count())
-            if n == 0:
-                return []
-            results = self._collection.query(query_embeddings=[query_embedding], n_results=n)
-            vector_results = [
-                {"content": c, "score": 1 - results["distances"][0][i], "metadata": results["metadatas"][0][i]}
-                for i, c in enumerate(results["documents"][0])
-            ]
+            vector_results = self._vector_search_chroma(query, top_k)
         else:
-            vector_results = self._search_records(query, self._store, top_k)
+            vector_results = self._vector_search_memory(query, self._store, top_k)
 
-        # --- BM25 results ---
         bm25_results = self._bm25_search(query, top_k)
+        return self._hybrid_fuse(vector_results, bm25_results, top_k)
 
-        # --- Merge via RRF ---
-        if bm25_results:
-            merged = _reciprocal_rank_fusion([vector_results, bm25_results])
-            return merged[:top_k]
-        return vector_results[:top_k]
+    def search_with_filter(
+        self,
+        query: str,
+        metadata_filter: dict | None = None,
+        top_k: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Hybrid search with metadata pre-filtering on the vector side.
+
+        The metadata_filter dict may contain keys like 'ma_thu_tuc' or 'doc_id'.
+        For Weaviate, this becomes a Filter.by_property("doc_id").equal(...).
+        BM25 results are also filtered in-memory to the same doc_id.
+        """
+        if not metadata_filter:
+            return self.search(query, top_k)
+
+        doc_id_val = metadata_filter.get("ma_thu_tuc") or metadata_filter.get("doc_id")
+        if not doc_id_val:
+            return self.search(query, top_k)
+
+        # --- Vector search with filter ---
+        if self._backend == "weaviate":
+            from weaviate.classes.query import Filter
+            wv_filter = Filter.by_property("doc_id").equal(doc_id_val)
+            vector_results = self._vector_search_weaviate(query, top_k, filters=wv_filter)
+        elif self._backend == "memory":
+            filtered = [r for r in self._store
+                        if r["metadata"].get("doc_id") == doc_id_val
+                        or r["metadata"].get("ma_thu_tuc") == doc_id_val]
+            vector_results = self._vector_search_memory(query, filtered, top_k)
+        else:
+            # ChromaDB / other — fall back to unfiltered vector
+            vector_results = self._vector_search_chroma(query, top_k)
+
+        # --- BM25 search restricted to same doc_id ---
+        bm25_results = self._bm25_search_filtered(query, doc_id_val, top_k)
+        return self._hybrid_fuse(vector_results, bm25_results, top_k)
 
     def get_collection_size(self) -> int:
         if self._backend == "weaviate":
@@ -269,16 +353,8 @@ class EmbeddingStore:
             except Exception:
                 pass
 
-    def search_with_filter(self, query: str, top_k: int = 3, metadata_filter: dict | None = None) -> list[dict]:
-        if metadata_filter is None:
-            return self.search(query, top_k)
-        if self._backend == "memory":
-            filtered = [r for r in self._store if all(r["metadata"].get(k) == v for k, v in metadata_filter.items())]
-            return self._search_records(query, filtered, top_k)
-        # For weaviate/chroma fall back to unfiltered hybrid search
-        return self.search(query, top_k)
-
     def delete_document(self, doc_id: str) -> bool:
+        """Delete all chunks belonging to a document by doc_id."""
         if self._backend == "weaviate":
             from weaviate.classes.query import Filter
             response = self._weaviate_collection.query.fetch_objects(
@@ -290,12 +366,14 @@ class EmbeddingStore:
             for uuid in uuids:
                 self._weaviate_collection.data.delete_by_id(uuid)
             return True
+
         if self._backend == "chroma":
             results = self._collection.get(where={"doc_id": doc_id})
             if results["ids"]:
                 self._collection.delete(ids=results["ids"])
                 return True
             return False
+
         before = len(self._store)
         self._store = [r for r in self._store if r["metadata"].get("doc_id") != doc_id]
         self._bm25_docs = [r for r in self._bm25_docs if r["metadata"].get("doc_id") != doc_id]

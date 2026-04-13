@@ -17,4 +17,4 @@ __pycache__/
 .omx/
 .venv/
 src_w_solution/
-data/
+data/.chroma_db/

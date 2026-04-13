@@ -99,7 +99,7 @@ def evaluate_retrieval(
         # Search
         if meta_filter:
             search_results = store.search_with_filter(
-                query_text, top_k=top_k, metadata_filter=meta_filter
+                query_text, metadata_filter=meta_filter, top_k=top_k,
             )
             n_with_filter += 1
             total_filter_prec += filter_precision(search_results, meta_filter)
@@ -154,15 +154,20 @@ def main():
     print(f"[eval_retrieval] Loading Pipeline to evaluate {len(queries)} queries (top_k={args.top_k})...")
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
+    from dotenv import load_dotenv
+    load_dotenv(override=False)
+
     from src.embeddings.base import get_embedder_by_name
     from src.retrieval.store import EmbeddingStore
+    from src.agent import QueryParser
     
     try:
         embedder = get_embedder_by_name()
         store = EmbeddingStore(embedder)
+        parser = QueryParser()
         
-        print(f"🤖 Đang chạy bộ đánh giá Retrieval...")
-        metrics = evaluate_retrieval(store, queries, top_k=args.top_k)
+        print(f"🤖 Đang chạy bộ đánh giá Retrieval (tích hợp Agentic QueryParser)...")
+        metrics = evaluate_retrieval(store, queries, top_k=args.top_k, parser=parser)
         
         print("\n--- 📊 KẾT QUẢ ĐÁNH GIÁ ---")
         print(f"Doc Hit @{args.top_k}:      {metrics['doc_hit_at_k'] * 100:.2f}%")
