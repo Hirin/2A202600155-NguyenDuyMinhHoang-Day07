@@ -1,109 +1,171 @@
-"""LangGraph-based ReAct Agent for TTHC RAG.
+"""Deterministic RAG orchestrator with corrective retry + self-check.
 
-Luồng chính:
-    user question
-        → call_model node  (LLM suy luận, có thể gọi tool)
-        ↓ (nếu tool_call)
-        call_tools node    (chạy search_database, hybrid BM25 + vector)
-        ↑ (quay lại)
-        call_model node    (LLM nhìn kết quả, suy luận tiếp hoặc kết thúc)
-        → END              (LLM trả lời cuối cùng)
+Replaces the LangGraph ReAct loop with a structured pipeline:
+    1. Parse query → metadata filters + section intent
+    2. Hybrid search with filters
+    3. Judge retrieval quality → optional retry
+    4. Augment → XML prompt
+    5. Generate → structured JSON
+    6. Self-check → corrections
+    7. Return RAGResponse
 """
 from __future__ import annotations
 
 import json
-from typing import Annotated, Sequence
+import os
+from typing import Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
-from typing_extensions import TypedDict
 
+from .augmentation.augmentor import Augmentor
+from .generation.schemas import RAGResponse, RAGStatus
+from .generation.self_check import SelfChecker
+from .query.query_parser import QueryParser
 from .retrieval.store import EmbeddingStore
 
 
 # ------------------------------------------------------------------ #
-# Agent State
+# Config
 # ------------------------------------------------------------------ #
-class AgentState(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], add_messages]
+DEFAULT_LLM_MODEL = os.getenv("OPENAI_LLM_MODEL", "gpt-4o-mini")
+RETRIEVAL_SCORE_THRESHOLD = 0.4
+MIN_EVIDENCE_COUNT = 1
+MAX_RETRIES = 1
 
 
-# ------------------------------------------------------------------ #
-# KnowledgeBaseAgent
-# ------------------------------------------------------------------ #
 class KnowledgeBaseAgent:
+    """Deterministic RAG orchestrator for TTHC administrative procedures.
+
+    Pipeline:
+        query_parser → search_with_filter → judge → [retry] →
+        augmentor → LLM → self_check → RAGResponse
     """
-    Agentic RAG dựa trên LangGraph.
 
-    Khi được hỏi, LLM tự quyết định có cần tìm kiếm thêm không,
-    và gọi tool `search_database` với query phù hợp.
-    """
-
-    SYSTEM_PROMPT = (
-        "Bạn là trợ lý hành chính chuyên về Thủ tục Hành chính Việt Nam.\n"
-        "Khi cần thông tin, hãy gọi tool `search_database` với từ khóa thích hợp.\n"
-        "Bạn có thể gọi tool nhiều lần với query khác nhau nếu cần.\n"
-        "Trả lời DỰA TRÊN thông tin lấy được từ tool. "
-        "Nếu tool không trả về thông tin liên quan, hãy nói rõ điều đó thay vì bịa."
-    )
-
-    def __init__(self, store: EmbeddingStore, model: str = "gpt-4o-mini") -> None:
+    def __init__(
+        self,
+        store: EmbeddingStore,
+        model: str = DEFAULT_LLM_MODEL,
+    ) -> None:
         self.store = store
-
-        # Build the tool with access to store via closure
-        @tool
-        def search_database(query: str) -> str:
-            """Tìm kiếm thông tin thủ tục hành chính trong cơ sở dữ liệu.
-            Trả về các đoạn văn bản liên quan nhất. Dùng từ khóa tiếng Việt ngắn gọn."""
-            results = store.search(query, top_k=3)
-            if not results:
-                return "Không tìm thấy thông tin liên quan."
-            parts = []
-            for i, r in enumerate(results, 1):
-                src = r["metadata"].get("source", "unknown")
-                parts.append(f"[{i}] Nguồn: {src}\n{r['content']}")
-            return "\n\n---\n\n".join(parts)
-
-        self._search_tool = search_database
-        tools = [search_database]
-
-        llm = ChatOpenAI(model=model)
-        self._llm_with_tools = llm.bind_tools(tools)
-
-        # Build LangGraph
-        tool_node = ToolNode(tools)
-
-        def call_model(state: AgentState) -> dict:
-            messages = state["messages"]
-            response = self._llm_with_tools.invoke(messages)
-            return {"messages": [response]}
-
-        def should_continue(state: AgentState) -> str:
-            last = state["messages"][-1]
-            if hasattr(last, "tool_calls") and last.tool_calls:
-                return "call_tools"
-            return END
-
-        graph = StateGraph(AgentState)
-        graph.add_node("call_model", call_model)
-        graph.add_node("call_tools", tool_node)
-        graph.set_entry_point("call_model")
-        graph.add_conditional_edges("call_model", should_continue, {"call_tools": "call_tools", END: END})
-        graph.add_edge("call_tools", "call_model")
-        self._graph = graph.compile()
+        self._model_name = model
+        self._llm = ChatOpenAI(model=model, temperature=0)
+        self._parser = QueryParser()
+        self._augmentor = Augmentor()
+        self._checker = SelfChecker()
 
     def answer(self, question: str) -> str:
-        """Run the ReAct agent and return the final answer string."""
-        initial_state = {
-            "messages": [
-                SystemMessage(content=self.SYSTEM_PROMPT),
-                HumanMessage(content=question),
-            ]
+        """Run the full RAG pipeline and return the answer string.
+
+        Returns the answer text for backward compatibility.
+        Use answer_structured() for full RAGResponse.
+        """
+        response = self.answer_structured(question)
+        return response.answer
+
+    def answer_structured(self, question: str) -> RAGResponse:
+        """Run the full RAG pipeline and return structured RAGResponse."""
+
+        # 1. Parse query
+        parsed = self._parser.parse(question)
+
+        # 2. Retrieve evidence
+        evidence = self._retrieve(parsed.clean_query, parsed.metadata_filter)
+
+        # 3. Judge retrieval quality → retry if needed
+        if self._should_retry(evidence) and parsed.query_variants:
+            variant = parsed.query_variants[0]
+            retry_evidence = self._retrieve(variant, parsed.metadata_filter)
+            if self._avg_score(retry_evidence) > self._avg_score(evidence):
+                evidence = retry_evidence
+
+        # 4. Early exit if no evidence
+        if not evidence:
+            return RAGResponse.insufficient(
+                "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
+            )
+
+        # 5. Build prompt
+        prompt = self._augmentor.build_prompt(question, evidence)
+
+        # 6. Generate
+        try:
+            raw_response = self._generate(prompt)
+            response = self._parse_llm_output(raw_response)
+        except Exception as e:
+            return RAGResponse(
+                answer=f"Lỗi khi xử lý câu hỏi: {e}",
+                status=RAGStatus.INSUFFICIENT,
+            )
+
+        # 7. Self-check (Tier 1 always, Tier 2 conditional)
+        query_context = {
+            "section_intent": parsed.section_intent,
+            "avg_retrieval_score": self._avg_score(evidence),
+            "citation_count": len(response.citations),
         }
-        result = self._graph.invoke(initial_state)
-        last_msg = result["messages"][-1]
-        return last_msg.content
+        response, check_result = self._checker.check(response, evidence, query_context)
+
+        return response
+
+    # ------------------------------------------------------------------ #
+    # Internal methods
+    # ------------------------------------------------------------------ #
+    def _retrieve(
+        self,
+        query: str,
+        metadata_filter: dict[str, str] | None = None,
+        top_k: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Run hybrid search with optional metadata filters."""
+        if metadata_filter:
+            return self.store.search_with_filter(
+                query, top_k=top_k, metadata_filter=metadata_filter
+            )
+        return self.store.search(query, top_k=top_k)
+
+    def _should_retry(self, evidence: list[dict]) -> bool:
+        """Judge if retrieval quality is sufficient."""
+        if len(evidence) < MIN_EVIDENCE_COUNT:
+            return True
+        if self._avg_score(evidence) < RETRIEVAL_SCORE_THRESHOLD:
+            return True
+        return False
+
+    @staticmethod
+    def _avg_score(evidence: list[dict]) -> float:
+        """Average retrieval score."""
+        if not evidence:
+            return 0.0
+        return sum(e.get("score", 0) for e in evidence) / len(evidence)
+
+    def _generate(self, prompt: str) -> str:
+        """Call LLM and return raw text response."""
+        response = self._llm.invoke(prompt)
+        return response.content
+
+    def _parse_llm_output(self, raw: str) -> RAGResponse:
+        """Parse LLM JSON output into RAGResponse.
+
+        Handles:
+        - Clean JSON
+        - JSON wrapped in ```json ... ```
+        - Fallback: treat as plain text answer
+        """
+        text = raw.strip()
+
+        # Strip markdown code fence if present
+        if text.startswith("```"):
+            lines = text.split("\n")
+            # Remove first and last lines (```json and ```)
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            text = "\n".join(lines).strip()
+
+        try:
+            data = json.loads(text)
+            return RAGResponse.from_dict(data)
+        except json.JSONDecodeError:
+            # Fallback: treat raw text as answer
+            return RAGResponse(
+                answer=raw.strip(),
+                status=RAGStatus.GROUNDED,
+            )
