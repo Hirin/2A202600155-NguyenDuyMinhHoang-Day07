@@ -6,9 +6,9 @@ import os
 import re
 from typing import Any, Callable
 
-from .chunking import _dot
-from .embeddings import _mock_embed
-from .models import Document
+from ..chunking.base import _dot
+from ..embeddings.mock import _mock_embed
+from ..models import Document
 
 
 def _tokenize(text: str) -> list[str]:

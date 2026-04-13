@@ -22,7 +22,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from typing_extensions import TypedDict
 
-from .store import EmbeddingStore
+from .retrieval.store import EmbeddingStore
 
 
 # ------------------------------------------------------------------ #

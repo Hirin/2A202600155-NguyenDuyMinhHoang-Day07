@@ -30,7 +30,7 @@ from src.embeddings import (
     _mock_embed,
 )
 from src.models import Document
-from src.store import EmbeddingStore
+from src.retrieval import EmbeddingStore
 from src.utils import setup_logger
 
 load_dotenv(override=False)

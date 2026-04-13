@@ -18,7 +18,7 @@ from .embeddings import (
     _mock_embed,
 )
 from .models import Document
-from .store import EmbeddingStore
+from .retrieval import EmbeddingStore
 
 __all__ = [
     "Document",
