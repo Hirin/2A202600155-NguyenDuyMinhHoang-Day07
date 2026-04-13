@@ -1,235 +1,311 @@
-# Ngày 7 — Nền Tảng Dữ Liệu: Embedding & Vector Store
+# TTHC Assistant — Metadata-first Administrative RAG
+
+Hệ thống tra cứu thủ tục hành chính (TTHC) Việt Nam sử dụng **Retrieval-Augmented Generation** với kiến trúc **metadata-first**, hỗ trợ tra cứu có nguồn trích dẫn, lọc theo cơ quan/lĩnh vực, và tự kiểm chứng câu trả lời.
+
+> **MSSV:** 2A202600155 — Nguyễn Duy Minh Hoàng  
+> **Lab:** Day 08 — Administrative RAG Pipeline
 
 ---
 
-## Mục Tiêu
+## Tổng quan kiến trúc
 
-Sau lab này, bạn cần có thể:
-- Giải thích cosine similarity và dự đoán điểm tương đồng giữa các văn bản
-- Triển khai 3 chiến lược chunking và so sánh ưu nhược điểm
-- Xây dựng vector store với search, filter, và delete
-- Kết nối knowledge base với agent qua RAG pattern
-- Chỉ ra khi nào retrieval giúp ích và khi nào nó thất bại
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Web UI (Vanilla JS)                      │
+│   index.html │ search.html │ procedure.html │ admin/*           │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ HTTP
+┌──────────────────────────▼──────────────────────────────────────┐
+│                     FastAPI (server.py)                          │
+│   /api/query │ /api/procedure │ /api/inspect │ /api/benchmark   │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────────┐
+│                  Deterministic RAG Pipeline                      │
+│                                                                  │
+│  QueryParser ─► HybridSearch ─► QualityJudge ─► Augmentor       │
+│       │              │               │              │            │
+│  (extract mã,   (BM25+Dense    (retry if low   (XML prompt      │
+│   section,       → RRF → MMR    confidence)     + reorder)       │
+│   agency)        → Parent                           │            │
+│                   Resolve)                          ▼            │
+│                                              LLM Generation      │
+│                                                    │             │
+│                                              2-Tier SelfCheck    │
+│                                              (Rule → LLM)        │
+│                                                    │             │
+│                                              RAGResponse         │
+│                                              {answer, facts,     │
+│                                               citations, status} │
+└──────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Cấu Trúc Lab: 2 Phase
+## Khởi động nhanh
 
-### Phase 1 — Cá Nhân: Hoàn Thành src package
+### 1. Cài đặt
 
-Mỗi sinh viên **tự mình** hoàn thành tất cả TODO trong `src/chunking.py`, `src/store.py`, và `src/agent.py`. `Document` dataclass và `FixedSizeChunker` đã được implement sẵn làm ví dụ.
+```bash
+# Clone và tạo venv
+cd 2A202600155-NguyenDuyMinhHoang-Day07
+python -m venv .venv
+source .venv/bin/activate        # Linux/Mac
+# .venv\Scripts\activate         # Windows
 
-### Phase 2 — Nhóm: So Sánh Retrieval Strategy
+# Cài dependencies (dùng uv nếu có)
+uv pip install -r requirements.txt
+# hoặc: pip install -r requirements.txt
+```
 
-Nhóm cùng chọn một bộ tài liệu và thống nhất 5 benchmark queries. Mỗi thành viên **thử strategy riêng** (chunking, metadata), chạy cùng queries, rồi **so sánh kết quả trong nhóm** để học từ nhau.
+### 2. Cấu hình `.env`
+
+```bash
+cp .env.example .env
+```
+
+Chỉnh sửa `.env` theo nhu cầu:
+
+```env
+# Bắt buộc cho generation
+OPENAI_API_KEY=sk-...
+OPENAI_LLM_MODEL=gpt-4o-mini
+
+# Embedding (chọn 1 trong 3)
+EMBEDDING_PROVIDER=mock          # mock | openai | llamacpp
+
+# Nếu dùng llamacpp (VietLegal-Harrier)
+LLAMACPP_SERVER_URL=http://localhost:8086
+
+# Nếu dùng Weaviate cloud
+WEAVIATE_URL=https://...
+WEAVIATE_API_KEY=...
+```
+
+### 3. Chạy Web App
+
+```bash
+uvicorn server:app --reload
+```
+
+Mở trình duyệt: **http://localhost:8000**
+
+### 4. Chạy tests
+
+```bash
+pytest tests/test_solution.py -v
+```
+
+> ✅ 97 tests pass, không cần API key hay embedding server.
 
 ---
 
-## Thiết Lập Môi Trường
-
-```bash
-pip install -r requirements.txt
-pytest tests/ -v          # Phần lớn tests sẽ FAIL (chưa implement)
-```
-
-Mặc định, lab vẫn chạy với `_mock_embed` nên **không bắt buộc** cài embedder thật.
-File `.env` được tự động nạp khi chạy `main.py`. Với các Python snippet chạy trực tiếp, hãy `export` biến môi trường cần thiết hoặc gọi `load_dotenv()` nếu cần.
-
-## Tùy Chọn Embedding Backend
-
-### 1) Mặc định: Mock embedder
-
-Không cần cài gì thêm ngoài:
-```bash
-pip install -r requirements.txt
-```
-
-### 2) Tùy chọn: Local embedder `all-MiniLM-L6-v2`
-
-```bash
-pip install sentence-transformers
-python3 - <<'PY'
-from src import LocalEmbedder
-embedder = LocalEmbedder()
-print(embedder._backend_name)
-print(len(embedder("embedding smoke test")))
-PY
-```
-
-- Package `src` hỗ trợ `all-MiniLM-L6-v2` qua `sentence-transformers`.
-- Lần chạy đầu tiên model sẽ được tải về và cache local.
-
-### 3) Tùy chọn: OpenAI embedder
-
-```bash
-pip install openai
-export OPENAI_API_KEY=your-key-here
-python3 - <<'PY'
-from src import OpenAIEmbedder
-embedder = OpenAIEmbedder()
-print(embedder._backend_name)
-print(len(embedder("embedding smoke test")))
-PY
-```
-
-- Model mặc định cho lựa chọn này là `text-embedding-3-small`
-- Có thể đổi model bằng:
-```bash
-export OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-```
-
-### Quy tắc fallback
-
-- Nếu không chọn gì, lab dùng `_mock_embed`
-- Nếu chọn `local` hoặc `openai` nhưng setup thiếu, code sẽ tự fallback về `_mock_embed`
-- Có thể cấu hình qua `.env` mà không cần `source .env`
-- Script `main.py` chạy end-to-end và import public API từ package `src`
-
-### Lệnh verify nhanh
-
-Sau khi cài optional dependencies, có thể verify từng backend riêng:
-
-**Verify local embedder**
-
-```bash
-python3 - <<'PY'
-from src import LocalEmbedder
-
-embedder = LocalEmbedder()
-print(embedder._backend_name, len(embedder("embedding smoke test")))
-PY
-```
-
-**Verify OpenAI embedder**
-
-```bash
-python3 - <<'PY'
-from pathlib import Path
-from dotenv import load_dotenv
-from src import OpenAIEmbedder
-
-load_dotenv(dotenv_path=Path(".env"), override=False)
-embedder = OpenAIEmbedder()
-print(embedder._backend_name, len(embedder("embedding smoke test")))
-PY
-```
-
-> Lưu ý: `OpenAIEmbedder` cần `OPENAI_API_KEY` hợp lệ trong môi trường hoặc `.env`.
-
----
-
-## Cấu Trúc Thư Mục
+## Cấu trúc thư mục
 
 ```
-├── README.md              ← Bạn đang đọc file này
-├── exercises.md           ← Bài tập (4 phần)
-├── main.py               ← Entry point cho manual demo
-├── src/
-│   ├── chunking.py       ← Chunking classes + similarity helper
-│   ├── store.py          ← EmbeddingStore
-│   ├── agent.py          ← KnowledgeBaseAgent
-│   └── ...               ← Các module nhỏ hơn
-├── data/                  ← Tài liệu mẫu + tài liệu nhóm (.txt/.md)
+├── server.py                  ← FastAPI backend (API + static files)
+├── main.py                    ← CLI entry point
+├── requirements.txt
+├── .env.example
+│
+├── src/                       ← Core RAG pipeline
+│   ├── __init__.py            ← Public API re-exports
+│   ├── agent.py               ← KnowledgeBaseAgent (orchestrator)
+│   ├── models.py              ← Document dataclass
+│   │
+│   ├── parsing/               ← TTHC document parser
+│   │   ├── tthc_parser.py     ← TTHCDocument, TTHCSection
+│   │   └── section_map.py     ← 40+ heading variants → 11 canonical keys
+│   │
+│   ├── chunking/              ← Chunking strategies
+│   │   ├── base.py            ← Fixed/Sentence/Recursive chunkers
+│   │   ├── tthc_section_chunker.py  ← Parent-child section chunker
+│   │   ├── comparator.py      ← Strategy comparison tool
+│   │   └── models.py          ← ParentChildChunk dataclass
+│   │
+│   ├── embeddings/            ← Embedding providers
+│   │   ├── base.py            ← EmbedderProtocol (query/document split)
+│   │   ├── mock.py            ← Mock embedder (CI/testing)
+│   │   ├── openai_embedder.py ← OpenAI text-embedding-3-small
+│   │   ├── llamacpp.py        ← VietLegal-Harrier via llama-server
+│   │   └── lmstudio.py        ← LM Studio endpoint
+│   │
+│   ├── retrieval/             ← Hybrid search + resolution
+│   │   ├── store.py           ← EmbeddingStore (BM25 + vector + filter)
+│   │   ├── fusion.py          ← RRF + MMR algorithms
+│   │   └── parent_resolver.py ← Child→Parent section resolution
+│   │
+│   ├── query/                 ← Query understanding
+│   │   └── query_parser.py    ← Extract mã_thủ_tục, section intent, agency
+│   │
+│   ├── augmentation/          ← Prompt engineering
+│   │   └── augmentor.py       ← XML prompt builder + lost-in-middle reorder
+│   │
+│   └── generation/            ← Output + verification
+│       ├── schemas.py         ← RAGResponse, RAGFacts, RAGStatus
+│       └── self_check.py      ← 2-tier: Rule-based → LLM conditional
+│
+├── web/                       ← Frontend (vanilla HTML/CSS/JS)
+│   ├── index.html             ← Trang chủ (hero search)
+│   ├── search.html            ← Tra cứu 3 cột (filter│answer│source)
+│   ├── procedure.html         ← Chi tiết thủ tục (accordion sections)
+│   ├── css/
+│   │   ├── tokens.css         ← Design tokens
+│   │   ├── base.css           ← Layout + reset
+│   │   └── components.css     ← Cards, badges, chips, accordion
+│   ├── js/
+│   │   ├── api.js             ← Fetch wrapper
+│   │   └── search.js          ← Search page logic
+│   └── admin/
+│       ├── dashboard.html     ← System health + document preview
+│       ├── inspector.html     ← Retrieval pipeline debugger
+│       └── benchmark.html     ← Benchmark query viewer
+│
+├── scripts/
+│   ├── crawl_tthc.py          ← Crawler dữ liệu từ dichvucong.gov.vn
+│   ├── start_embedding_server.sh  ← Khởi động llama-server
+│   └── migrate_weaviate.py    ← Tạo collection Weaviate mới
+│
 ├── tests/
-│   └── test_solution.py   ← Test suite (30+ tests)
-├── report/
-│   └── REPORT.md         ← Báo cáo (1 file/sinh viên)
-├── docs/
-│   ├── EVALUATION.md     ← Evaluation metrics
-│   ├── INSTRUCTOR_GUIDE.md ← Instructor notes
-│   └── SCORING.md        ← Tiêu chí chấm điểm
-└── requirements.txt
+│   ├── test_solution.py       ← 97 unit tests
+│   ├── benchmark_queries.json ← 25 gold queries (5 categories)
+│   ├── eval_retrieval.py      ← Retrieval metrics
+│   └── eval_rag.py            ← End-to-end RAG metrics
+│
+├── data/thutuchanhchinh/
+│   ├── markdown_json/         ← 5,553 TTHC documents (parsed .md)
+│   │   ├── BoCongThuong/
+│   │   ├── BoCongAn/
+│   │   └── ...
+│   └── TTHC_IDs/              ← CSV mapping (PROCEDURE_CODE → internal ID)
+│
+├── .github/workflows/
+│   └── rag_eval.yml           ← CI/CD: PR tests + nightly benchmark
+│
+├── docs/                      ← Tài liệu lab gốc
+└── report/                    ← Báo cáo
 ```
 
 ---
 
-## Các Giai Đoạn Lab
+## Tính năng chính
 
-| Giai Đoạn | Hoạt Động |
-|-----------|-----------|
-| Chuẩn bị tài liệu | Nhóm chọn domain, thu thập tài liệu, chuyển sang .md/.txt |
-| Lập trình cá nhân | Warm-up + implement tất cả TODO (cá nhân) |
-| Thiết kế strategy | Mỗi người thử strategy riêng, thống nhất 5 queries |
-| So sánh trong nhóm | Chạy benchmark, so sánh kết quả, chuẩn bị demo |
-| Demo & thảo luận | Trình bày strategy + so sánh, thảo luận liên nhóm |
+### Public UI — Tra cứu thủ tục
 
----
+| Tính năng | Mô tả |
+|-----------|-------|
+| **Search-first UX** | Ô tìm kiếm lớn, không phải chatbot |
+| **Metadata filter** | Lọc theo lĩnh vực, cơ quan, đối tượng |
+| **Structured answer** | Bảng facts (mã, thời hạn, phí, cơ quan) |
+| **Status badge** | 🟢 Grounded / 🟡 Insufficient / 🔴 Conflict |
+| **Citation chips** | Click để xem nguyên văn section gốc |
+| **Direct link** | Link trực tiếp tới Cổng DVC Quốc gia (dichvucong.gov.vn) |
+| **Detail page** | Toàn văn thủ tục với accordion sections |
 
-## Nhiệm Vụ Cá Nhân (Phase 1)
+### Admin Console — Đánh giá RAG
 
-### Đã implement sẵn (tham khảo)
-- `Document` dataclass — container cho text + metadata
-- `FixedSizeChunker` — sliding window chunking
-
-### Cần implement
-- `SentenceChunker` — chia theo ranh giới câu
-- `RecursiveChunker` — thử từng separator theo thứ tự
-- `compute_similarity` — cosine similarity
-- `ChunkingStrategyComparator` — so sánh 3 chiến lược
-- `EmbeddingStore` — wrapper quanh vector store (5 methods)
-- `KnowledgeBaseAgent` — RAG pattern agent
+| Tính năng | Mô tả |
+|-----------|-------|
+| **Dashboard** | Trạng thái hệ thống, danh sách tài liệu |
+| **Retrieval Inspector** | Debug pipeline: parsed query → filters → RRF scores → sections |
+| **Benchmark** | 25 gold queries × 5 categories, xem expected vs actual |
 
 ---
 
-## Nhiệm Vụ Nhóm (Phase 2) — So Sánh Strategy
+## API Endpoints
 
-1. **Chọn bộ tài liệu** (5-10 docs): FAQ, SOP, policy, internal docs, hoặc domain bất kỳ
-2. **Chuyển sang .txt/.md** nếu cần (xem tips trong exercises.md)
-3. **Thống nhất 5 benchmark queries** kèm gold answers
-4. **Mỗi thành viên thử strategy riêng**: chunking method, tham số, metadata schema
-5. **So sánh kết quả trong nhóm**: strategy nào cho retrieval tốt hơn? Tại sao?
+| Method | Path | Mô tả |
+|--------|------|-------|
+| `GET` | `/api/health` | Kiểm tra trạng thái hệ thống |
+| `POST` | `/api/query` | Chạy full RAG pipeline, trả `RAGResponse` |
+| `GET` | `/api/procedure/{mã}` | Chi tiết 1 thủ tục (parsed sections) |
+| `GET` | `/api/procedures?page=1` | Danh sách thủ tục (phân trang) |
+| `POST` | `/api/inspect` | Debug retrieval pipeline (admin) |
+| `GET` | `/api/benchmark` | Danh sách benchmark queries |
 
----
-
-## Cách Tự Đánh Giá Kết Quả Retrieval
-
-Khi chạy benchmark, đừng chỉ hỏi **"code có chạy không?"** mà hãy tự kiểm tra 5 góc nhìn sau:
-
-1. **Retrieval Precision**
-   - Top-3 có chứa chunk thật sự liên quan không?
-   - Score có tách được kết quả tốt và nhiễu không?
-
-2. **Chunk Coherence**
-   - Chunk có giữ được ý trọn vẹn không?
-   - Strategy nào làm chunk dễ đọc và dễ retrieve hơn?
-
-3. **Metadata Utility**
-   - `search_with_filter()` có giúp tăng độ chính xác không?
-   - Filter có quá chặt, làm mất kết quả tốt không?
-
-4. **Grounding Quality**
-   - Câu trả lời của agent có thật sự dựa trên retrieved context không?
-   - Có thể chỉ ra chunk nào hỗ trợ câu trả lời không?
-
-5. **Data Strategy Impact**
-   - Bộ tài liệu nhóm chọn có phù hợp với benchmark queries không?
-   - Strategy chunking / metadata của bạn có hợp với domain không?
-
-> Xem `docs/EVALUATION.md` nếu bạn muốn một checklist chi tiết hơn cho phần này.
-
----
-
-## Chấm Điểm
-
-Xem chi tiết tại `docs/SCORING.md`. Tóm tắt:
-
-| Phần | Điểm |
-|------|------|
-| Cá nhân (code + phân tích) | 60 |
-| Nhóm (strategy + so sánh) | 40 |
-| **Tổng** | **100** |
-
----
-
-## Sản Phẩm Nộp Bài
-
-1. `src/` — hoàn thành tất cả TODO cần thiết
-2. `report/REPORT.md` — một báo cáo/sinh viên (gồm cả phần nhóm và cá nhân)
-
----
-
-## Chạy Kiểm Thử
+### Ví dụ gọi API
 
 ```bash
-pytest tests/ -v
+# Health check
+curl http://localhost:8000/api/health
+
+# Tra cứu
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Thủ tục 1.00309 cần hồ sơ gì?"}'
+
+# Xem chi tiết thủ tục
+curl http://localhost:8000/api/procedure/1.00309
 ```
+
+---
+
+## Embedding Backends
+
+Hệ thống hỗ trợ 3 backend embedding, cấu hình qua `EMBEDDING_PROVIDER` trong `.env`:
+
+| Provider | Model | Dim | Ghi chú |
+|----------|-------|-----|---------|
+| `mock` | Hash-based | 128 | Mặc định, dùng cho test/CI |
+| `openai` | text-embedding-3-small | 1536 | Cần `OPENAI_API_KEY` |
+| `llamacpp` | VietLegal-Harrier-0.6b | 1024 | GGUF local, cần llama-server |
+
+### Khởi động Harrier embedding server
+
+```bash
+bash scripts/start_embedding_server.sh
+# Server chạy tại http://localhost:8086
+```
+
+---
+
+## Benchmark & Evaluation
+
+### 25 Gold Queries (5 categories)
+
+| Category | Số queries | Ví dụ |
+|----------|-----------|-------|
+| `exact_lookup` | 5 | "Phí lệ phí thủ tục 1.00309?" |
+| `multi_field` | 5 | "Phí, thời hạn và hồ sơ cần nộp?" |
+| `metadata_sensitive` | 5 | "Thủ tục của Bộ Công Thương?" |
+| `legal_recency` | 4 | "Nghị định nào quy định thủ tục này?" |
+| `abstention` | 5 | "Cách nấu phở bò?" → phải từ chối |
+
+### Retrieval Metrics
+
+- `doc_hit@K` — đúng document trong top-K?
+- `section_hit@K` — đúng section trong top-K?
+- `filter_precision` — filter lọc đúng?
+- `duplicate_ratio` — trùng lặp trong top-K?
+
+### RAG Metrics
+
+- `context_recall` — evidence chứa gold answer?
+- `faithfulness` — câu trả lời bám sát evidence?
+- `citation_correctness` — trích dẫn hợp lệ?
+- `abstention_correctness` — từ chối đúng câu ngoài phạm vi?
+
+---
+
+## CI/CD
+
+File `.github/workflows/rag_eval.yml`:
+
+- **PR pipeline** — chạy 97 unit tests (~3 giây)
+- **Nightly pipeline** — chạy full benchmark + eval (mock embedder)
+
+---
+
+## Tech Stack
+
+| Layer | Công nghệ |
+|-------|----------|
+| Language | Python 3.12+ |
+| Backend | FastAPI + Uvicorn |
+| Frontend | Vanilla HTML/CSS/JS |
+| Embedding | EmbedderProtocol (mock / OpenAI / llama.cpp) |
+| Retrieval | BM25 + Dense → RRF → MMR → Parent Resolve |
+| Generation | OpenAI GPT-4o-mini |
+| Vector DB | Weaviate Cloud (production) / In-memory (dev) |
+| Testing | pytest (97 tests) |
+| CI/CD | GitHub Actions |
