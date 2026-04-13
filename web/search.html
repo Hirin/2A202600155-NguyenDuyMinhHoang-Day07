@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kết quả Tra cứu - TTHC Assistant</title>
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/components.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="/" class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path></svg>
+                TTHC Assistant
+            </a>
+            <nav class="nav-links">
+                <a href="/">Trang chủ</a>
+                <a href="/search.html" class="active">Tra cứu</a>
+                <a href="/admin/dashboard.html">Admin Console</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content container">
+        <div class="search-layout">
+            <!-- Left: Metadata Filters -->
+            <aside class="panel">
+                <h3 class="panel-title">Lọc theo dữ kiện</h3>
+                <form id="filter-form">
+                    <div style="margin-bottom: var(--space-4);">
+                        <label style="display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">Lĩnh vực</label>
+                        <select name="linh_vuc">
+                            <option value="">-- Tất cả --</option>
+                            <option value="Xuất nhập khẩu">Xuất nhập khẩu</option>
+                            <option value="An toàn bức xạ và hạt nhân">An toàn KHCN</option>
+                            <!-- Would normally populate from API -->
+                        </select>
+                    </div>
+                    <div style="margin-bottom: var(--space-4);">
+                        <label style="display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">Cơ quan</label>
+                        <select name="co_quan">
+                            <option value="">-- Tất cả --</option>
+                            <option value="BoCongThuong">Bộ Công Thương</option>
+                            <option value="BoCongAn">Bộ Công An</option>
+                            <option value="BoTuPhap">Bộ Tư pháp</option>
+                        </select>
+                    </div>
+                     <div style="margin-bottom: var(--space-4);">
+                        <label style="display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">Đối tượng</label>
+                        <select name="doi_tuong">
+                            <option value="">-- Tất cả --</option>
+                            <option value="Doanh nghiệp">Doanh nghiệp</option>
+                            <option value="Tổ chức">Tổ chức</option>
+                            <option value="Công dân">Công dân</option>
+                        </select>
+                    </div>
+                </form>
+            </aside>
+
+            <!-- Middle: Search Input & Answer -->
+            <section class="results-area">
+                <form id="query-form" style="display: flex; gap: var(--space-2); margin-bottom: var(--space-6);">
+                    <input type="text" id="query-input" placeholder="Nhập câu hỏi tra cứu..." required>
+                    <button type="submit" class="btn btn-primary" id="btn-submit">Hỏi AI</button>
+                </form>
+
+                <div id="loading" class="hidden" style="text-align: center; padding: 3rem 0;">
+                    <div class="loader"></div>
+                    <p style="color: var(--text-muted); margin-top: 1rem;">Đang truy xuất CSDL và tổng hợp câu trả lời...</p>
+                </div>
+
+                <div id="answer-container" class="hidden">
+                    <div class="card" style="border-top: 4px solid var(--primary-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-4);">
+                            <h2 style="margin: 0; font-size: 1.25rem;">Kết quả tổng hợp</h2>
+                            <div id="status-badge"></div>
+                        </div>
+
+                        <!-- Summary text -->
+                        <div id="answer-text" style="margin-bottom: var(--space-6); font-size: 1.05rem; line-height: 1.6;"></div>
+
+                        <!-- Structured facts -->
+                        <h4 style="font-size: 1rem; color: var(--text-muted); margin-bottom: var(--space-2);">Dữ kiện trích xuất</h4>
+                        <div style="overflow-x: auto;">
+                            <table class="facts-table" id="facts-table">
+                                <tbody>
+                                    <!-- Rendered via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Citations -->
+                        <div style="margin-top: var(--space-6); border-top: 1px solid var(--border-color); padding-top: var(--space-4);">
+                            <h4 style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: var(--space-2);">Nguồn trích dẫn:</h4>
+                            <div id="citations-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right: Source Content Preview -->
+            <aside class="panel" style="background-color: #f1f5f9;">
+                <h3 class="panel-title">Dữ liệu nguồn</h3>
+                <div id="source-preview" style="font-size: 0.9rem; line-height: 1.6; color: var(--text-main);">
+                    <p style="color: var(--text-muted); font-style: italic;">Bấm vào một trích dẫn (ví dụ: [1.00309|thoi_han]) để xem nguyên văn tài liệu gốc.</p>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/search.js"></script>
+</body>
+</html>

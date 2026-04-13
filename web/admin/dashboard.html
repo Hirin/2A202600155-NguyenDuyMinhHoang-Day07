@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - TTHC Assistant</title>
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <style>
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .metric-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--primary-color);
+            box-shadow: var(--shadow-sm);
+        }
+        .metric-title {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .admin-nav {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+        .admin-nav a {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+        .admin-nav a.active {
+            background: var(--primary-light);
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="/" class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path></svg>
+                TTHC Assistant Admin
+            </a>
+            <nav class="nav-links">
+                <a href="/">Về trang chủ</a>
+                <a href="/search.html">Tra cứu</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content container">
+        <h1 style="margin-bottom: 0.5rem;">Cổng Quản trị & Đánh giá</h1>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">Giám sát trạng thái RAG Pipeline và dữ liệu thủ tục hành chính.</p>
+        
+        <nav class="admin-nav">
+            <a href="/admin/dashboard.html" class="active">🌐 System Health</a>
+            <a href="/admin/inspector.html">🔍 Retrieval Inspector</a>
+            <a href="/admin/benchmark.html">📊 Benchmark</a>
+        </nav>
+
+        <div id="loading" style="text-align: center; padding: 2rem;"><div class="loader"></div></div>
+
+        <div id="content" class="hidden">
+            <h2>Trạng thái hệ thống (API Health)</h2>
+            <div class="metric-grid">
+                <div class="metric-card" id="status-card">
+                    <div class="metric-title">Agent Status</div>
+                    <div class="metric-value" style="color: var(--success-color);" id="agent-status">...</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Pipeline Strategy</div>
+                    <div class="metric-value" style="font-size:1.5rem">Deterministic RAG</div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem;">with 2-tier Self-Check</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Các tài liệu hiện có</h3>
+                <p style="color:var(--text-muted); margin-bottom: 1rem;">10 tài liệu mẫu đầu tiên</p>
+                <div style="overflow-x: auto;">
+                    <table class="facts-table" id="docs-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Mã thủ tục</th>
+                                <th>Tên thủ tục</th>
+                                <th>Cơ quan</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const loading = document.getElementById('loading');
+            const content = document.getElementById('content');
+            
+            try {
+                const health = await API.getHealth();
+                const statusEl = document.getElementById('agent-status');
+                if (health.agent_loaded) {
+                    statusEl.textContent = 'Active';
+                } else {
+                    statusEl.textContent = 'API keys missing';
+                    statusEl.style.color = 'var(--danger-color)';
+                    document.getElementById('status-card').style.borderLeftColor = 'var(--danger-color)';
+                }
+
+                // Load some procedures
+                const procs = await API.listProcedures(1);
+                const tbody = document.getElementById('docs-table').querySelector('tbody');
+                
+                procs.items.slice(0, 10).forEach((p, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="width:50px">${idx + 1}</td>
+                        <td style="width:120px"><a href="/procedure.html?id=${p.ma_thu_tuc}" target="_blank">${p.ma_thu_tuc}</a></td>
+                        <td>${p.ten_thu_tuc}</td>
+                        <td><span class="badge" style="background:#e2e8f0;color:#334155">${p.agency_folder}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                loading.classList.add('hidden');
+                content.classList.remove('hidden');
+            } catch(e) {
+                loading.innerHTML = `<p style="color:var(--danger-color)">Lỗi kết nối API: ${e.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

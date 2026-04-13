@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tra cứu TTHC - AI Assistant</title>
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <style>
+        .hero {
+            text-align: center;
+            padding: 4rem 0;
+        }
+        .hero h1 {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+        .hero p {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+        }
+        .search-box {
+            max-width: 700px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .search-box input {
+            padding: 1rem 1.5rem;
+            font-size: 1.1rem;
+            border-radius: 30px;
+            box-shadow: var(--shadow-md);
+            padding-right: 120px;
+        }
+        .search-box .btn-search {
+            position: absolute;
+            right: 8px;
+            top: 8px;
+            bottom: 8px;
+            border-radius: 24px;
+            padding: 0 1.5rem;
+        }
+        .suggested-queries {
+            margin-top: 2rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .suggested-title {
+            width: 100%;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="/" class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                TTHC Assistant
+            </a>
+            <nav class="nav-links">
+                <a href="/" class="active">Trang chủ</a>
+                <a href="/search.html">Tra cứu</a>
+                <a href="/admin/dashboard.html">Admin Console</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content container">
+        <div class="hero">
+            <h1>Trợ lý tra cứu thủ tục hành chính</h1>
+            <p>Hệ thống hỗ trợ giải đáp quy trình, thành phần hồ sơ, thời hạn bằng AI dựa trên văn bản nhà nước.</p>
+            
+            <div class="search-box">
+                <form action="/search.html" method="GET">
+                    <input type="text" name="q" placeholder="Ví dụ: Thủ tục 1.00309 cần nộp hồ sơ gì?" required autofocus>
+                    <button type="submit" class="btn btn-primary btn-search">Tra cứu</button>
+                </form>
+            </div>
+            
+            <div class="suggested-queries">
+                <div class="suggested-title">Tra cứu nhanh phổ biến:</div>
+                <a href="/search.html?q=thủ+tục+nhập+khẩu+ô+tô" class="chip">🚗 Thủ tục nhập khẩu ô tô</a>
+                <a href="/search.html?q=phí+lệ+phí+thủ+tục+1.00309" class="chip">💰 Phí lệ phí 1.00309</a>
+                <a href="/search.html?q=thời+hạn+giải+quyết+3.000163" class="chip">⏱ Thời hạn mã 3.000163</a>
+                <a href="/search.html?q=thủ+tục+của+bộ+công+thương" class="chip">🏛 TTHC Bộ Công Thương</a>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -43,6 +44,7 @@ class TTHCDocument:
     co_quan_thuc_hien: str = ""
     agency_folder: str = ""
     source_path: str = ""
+    source_url: str = ""
     sections: list[TTHCSection] = field(default_factory=list)
     raw_metadata: dict = field(default_factory=dict)
     preamble: str = ""                      # text before first section heading
@@ -72,6 +74,7 @@ class TTHCDocument:
             "co_quan_thuc_hien": self.co_quan_thuc_hien,
             "agency_folder": self.agency_folder,
             "source_path": self.source_path,
+            "source_url": self.source_url,
         }
 
 
@@ -99,6 +102,26 @@ class TTHCParser:
     # Regex for ## headings (optionally with trailing colon/whitespace)
     _HEADING_RE = re.compile(r"^##\s+(.+?)[\s:]*$", re.MULTILINE)
 
+    def __init__(self, ids_dir: str | Path | None = None):
+        """Initialize parser and optionally load mapping from TTHC_IDs directory."""
+        self._id_mapping = {}
+        if ids_dir:
+            self._load_id_mapping(Path(ids_dir))
+
+    def _load_id_mapping(self, ids_dir: Path):
+        """Load ma_thu_tuc to internal ID mapping from CSV files."""
+        for file in ids_dir.rglob("*.csv"):
+            try:
+                with open(file, "r", encoding="utf-8-sig") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        code = row.get("PROCEDURE_CODE")
+                        internal_id = row.get("ID")
+                        if code and internal_id:
+                            self._id_mapping[str(code)] = str(internal_id)
+            except Exception as e:
+                print(f"[TTHCParser] Could not load mapping from {file.name}: {e}")
+
     def parse_file(self, file_path: str | Path) -> TTHCDocument:
         """Parse a single TTHC markdown file."""
         p = Path(file_path)
@@ -122,10 +145,16 @@ class TTHCParser:
         doi_tuong = metadata.get("doi_tuong_thuc_hien", [])
         if isinstance(doi_tuong, str):
             doi_tuong = [x.strip() for x in doi_tuong.split(",")]
+            
+        ma_thu_tuc = metadata.get("ma_thu_tuc", p.stem)
+        source_url = ""
+        internal_id = self._id_mapping.get(ma_thu_tuc)
+        if internal_id:
+            source_url = f"https://dichvucong.gov.vn/p/home/dvc-tthc-thu-tuc-hanh-chinh-chi-tiet.html?ma_thu_tuc={internal_id}"
 
         return TTHCDocument(
             doc_id=p.stem,
-            ma_thu_tuc=metadata.get("ma_thu_tuc", p.stem),
+            ma_thu_tuc=ma_thu_tuc,
             ten_thu_tuc=title,
             quyet_dinh=metadata.get("quyet_dinh", ""),
             linh_vuc=metadata.get("linh_vuc", ""),
@@ -134,6 +163,7 @@ class TTHCParser:
             co_quan_thuc_hien=metadata.get("co_quan_thuc_hien", ""),
             agency_folder=agency_folder,
             source_path=str(p),
+            source_url=source_url,
             sections=sections,
             raw_metadata=metadata,
             preamble=preamble,

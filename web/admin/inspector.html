@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retrieval Inspector - Admin</title>
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <style>
+        .inspector-panel { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; }
+        .step-card { background: var(--surface-color); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1rem; }
+        .step-title { font-weight: 600; color: var(--primary-color); margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; }
+        pre { background: #f1f5f9; padding: 1rem; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="/" class="logo">TTHC Assistant Admin</a>
+            <nav class="nav-links">
+                <a href="/">Về trang chủ</a>
+                <a href="/admin/dashboard.html">Dashboard</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content container">
+        <h1 style="margin-bottom: 2rem;">Retrieval Inspector 🔍</h1>
+        
+        <div class="inspector-panel">
+            <div>
+                <div class="card">
+                    <h3>Truy vấn kiểm thử</h3>
+                    <form id="inspect-form">
+                        <textarea id="query-input" rows="4" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm);" placeholder="Nhập câu hỏi để xem pipeline tra cứu..."></textarea>
+                        <button type="submit" class="btn btn-primary" style="width: 100%">Run Inspector</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div id="results-area" class="hidden">
+                <div class="step-card">
+                    <div class="step-title">1. Query Parsing & Filter Extraction</div>
+                    <div id="step-parsing"></div>
+                </div>
+                
+                <div class="step-card">
+                    <div class="step-title">2. Final Retrieved Sections (RRF + Parent Resolved)</div>
+                    <div id="step-retrieval"></div>
+                </div>
+            </div>
+            
+            <div id="loading" class="hidden" style="grid-column: 2; text-align:center"><div class="loader"></div></div>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('inspect-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const q = document.getElementById('query-input').value;
+            if(!q) return;
+            
+            document.getElementById('results-area').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            
+            try {
+                const res = await fetch("/api/inspect", {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({query: q})
+                });
+                const data = await res.json();
+                
+                document.getElementById('step-parsing').innerHTML = `<pre>${JSON.stringify({
+                    "Query Variants": data.parsed_query,
+                    "Extracted Filters": data.filters_extracted
+                }, null, 2)}</pre>`;
+                
+                let html = '';
+                data.parent_resolved.forEach((item, idx) => {
+                    html += `<div style="margin-bottom:1rem; border-bottom:1px dashed #ccc; padding-bottom:1rem;">
+                        <strong>Rank #${idx+1} (Score: ${item.score.toFixed(3)})</strong><br>
+                        <span class="badge" style="background:#e2e8f0;color:#334155;margin: 0.5rem 0;">Doc: ${item.metadata.ma_thu_tuc} | Section: ${item.metadata.section_type}</span>
+                        <div style="font-size:0.9rem; color:var(--text-muted)">${item.content.substring(0, 300)}...</div>
+                    </div>`;
+                });
+                document.getElementById('step-retrieval').innerHTML = html || '<i>Không có kết quả</i>';
+                
+                document.getElementById('results-area').classList.remove('hidden');
+            } catch(err) {
+                alert("Error: " + err.message);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
