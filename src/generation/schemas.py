@@ -42,6 +42,9 @@ class RAGResponse:
     facts: RAGFacts = field(default_factory=RAGFacts)
     citations: list[str] = field(default_factory=list)
     status: RAGStatus = RAGStatus.GROUNDED
+    suggested_procedures: list[dict[str, str]] = field(default_factory=list)
+    debug_chunks: list[dict] = field(default_factory=list)
+    alpha: float = 0.5
 
     def to_dict(self) -> dict:
         return {
@@ -49,6 +52,9 @@ class RAGResponse:
             "facts": self.facts.to_dict(),
             "citations": self.citations,
             "status": self.status.value,
+            "suggested_procedures": self.suggested_procedures,
+            "debug_chunks": self.debug_chunks,
+            "alpha": self.alpha,
         }
 
     @classmethod
@@ -76,6 +82,7 @@ class RAGResponse:
             facts=facts,
             citations=data.get("citations", []),
             status=status,
+            suggested_procedures=data.get("suggested_procedures", []),
         )
 
     @classmethod

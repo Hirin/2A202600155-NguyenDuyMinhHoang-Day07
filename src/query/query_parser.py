@@ -89,8 +89,19 @@ class QueryParser:
         # 1. Extract ma_thu_tuc
         ma_match = _MA_THU_TUC_RE.search(original)
         if ma_match:
-            metadata_filter["ma_thu_tuc"] = ma_match.group(1)
+            raw_code = ma_match.group(1)
+            parts = raw_code.split('.')
+            # Normalize trailing zeros (match DB float truncation)
+            metadata_filter["ma_thu_tuc"] = f"{parts[0]}.{parts[1].rstrip('0')}"
             clean = clean.replace(ma_match.group(0), "").strip()
+        else:
+            # Fallback: User forgets the dot (e.g., 2000460 -> 2.00046)
+            no_dot_match = re.search(r"\b([123])(\d{4,6})\b", original)
+            if no_dot_match:
+                prefix = no_dot_match.group(1)
+                suffix = no_dot_match.group(2).rstrip('0')
+                metadata_filter["ma_thu_tuc"] = f"{prefix}.{suffix}"
+                clean = clean.replace(no_dot_match.group(0), "").strip()
 
         # 2. Extract agency
         for agency_name, folder in _AGENCY_MAP.items():

@@ -93,12 +93,14 @@ class EmbeddingStore:
         # --- Try Weaviate first ---
         weaviate_url = os.getenv("WEAVIATE_URL", "")
         weaviate_key = os.getenv("WEAVIATE_API_KEY", "")
+        self.weaviate_error = None
         if weaviate_url and weaviate_key:
             try:
                 self._init_weaviate(weaviate_url, weaviate_key)
             except ImportError:
-                pass   # weaviate package not installed
+                self.weaviate_error = "ImportError: weaviate package not installed"
             except Exception as e:
+                self.weaviate_error = f"{type(e).__name__}: {str(e)}"
                 print(f"[EmbeddingStore] Weaviate connection failed ({e}), falling back")
 
         # --- Try ChromaDB if Weaviate unavailable ---
@@ -164,21 +166,26 @@ class EmbeddingStore:
         return scored[:top_k]
 
     def _vector_search_weaviate(
-        self, query: str, top_k: int, filters=None
+        self, query: str, top_k: int, filters=None, alpha: float = 0.5
     ) -> list[dict[str, Any]]:
-        """Run near_vector search on Weaviate with optional filters."""
+        """Run native hybrid search on Weaviate with optional filters."""
         query_vector = self._embedding_fn(query)
         kwargs: dict[str, Any] = dict(
-            near_vector=query_vector, limit=top_k, return_metadata=["distance"],
+            query=query,
+            vector=query_vector,
+            alpha=alpha,
+            limit=top_k, 
+            return_metadata=["score"],
         )
         if filters is not None:
             kwargs["filters"] = filters
 
-        response = self._weaviate_collection.query.near_vector(**kwargs)
+        response = self._weaviate_collection.query.hybrid(**kwargs)
         results = []
         for obj in response.objects:
             meta = json.loads(obj.properties.get("meta_json", "{}"))
-            score = 1.0 - (obj.metadata.distance or 0.0)
+            # Weaviate v4 hybrid search populates metadata.score
+            score = obj.metadata.score if obj.metadata.score is not None else 0.0
             results.append({"content": obj.properties.get("content", ""), "score": score, "metadata": meta})
         return results
 
@@ -288,10 +295,10 @@ class EmbeddingStore:
 
         self._rebuild_bm25()
 
-    def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
+    def search(self, query: str, top_k: int = 5, alpha: float = 0.5) -> list[dict[str, Any]]:
         """Hybrid search: Vector + BM25 fused via Reciprocal Rank Fusion."""
         if self._backend == "weaviate":
-            vector_results = self._vector_search_weaviate(query, top_k)
+            vector_results = self._vector_search_weaviate(query, top_k, alpha=alpha)
         elif self._backend == "chroma":
             vector_results = self._vector_search_chroma(query, top_k)
         else:
@@ -306,6 +313,7 @@ class EmbeddingStore:
         metadata_filter: dict | None = None,
         top_k: int = 5,
         section_intent: str | None = None,
+        alpha: float = 0.5,
     ) -> list[dict[str, Any]]:
         """Hybrid search with metadata pre-filtering and optional section re-ranking.
 
@@ -316,12 +324,12 @@ class EmbeddingStore:
             section_intent: If provided, boost chunks whose section_type matches.
         """
         if not metadata_filter:
-            results = self.search(query, top_k * 2 if section_intent else top_k)
+            results = self.search(query, top_k * 2 if section_intent else top_k, alpha=alpha)
             return self._rerank_by_section(results, section_intent, top_k)
 
         doc_id_val = metadata_filter.get("ma_thu_tuc") or metadata_filter.get("doc_id")
         if not doc_id_val:
-            results = self.search(query, top_k * 2 if section_intent else top_k)
+            results = self.search(query, top_k * 2 if section_intent else top_k, alpha=alpha)
             return self._rerank_by_section(results, section_intent, top_k)
 
         # Over-fetch to have more candidates for section re-ranking
@@ -331,7 +339,7 @@ class EmbeddingStore:
         if self._backend == "weaviate":
             from weaviate.classes.query import Filter
             wv_filter = Filter.by_property("doc_id").equal(doc_id_val)
-            vector_results = self._vector_search_weaviate(query, fetch_k, filters=wv_filter)
+            vector_results = self._vector_search_weaviate(query, fetch_k, filters=wv_filter, alpha=alpha)
         elif self._backend == "memory":
             filtered = [r for r in self._store
                         if r["metadata"].get("doc_id") == doc_id_val

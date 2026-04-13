@@ -21,6 +21,7 @@ from .augmentation.augmentor import Augmentor
 from .generation.schemas import RAGResponse, RAGStatus
 from .generation.self_check import SelfChecker
 from .query.query_parser import QueryParser
+from .query.router import QueryRouter
 from .retrieval.store import EmbeddingStore
 
 
@@ -58,7 +59,17 @@ class KnowledgeBaseAgent:
             api_key=api_key,
             base_url=base_url
         )
+        
+        # Router LLM as requested by user
+        self._router_llm = ChatOpenAI(
+            model="gpt-5.4-nano",
+            temperature=0,
+            api_key=api_key,
+            base_url=base_url
+        )
+        
         self._parser = QueryParser()
+        self._router = QueryRouter(self._router_llm)
         self._augmentor = Augmentor()
         self._checker = SelfChecker()
 
@@ -77,21 +88,27 @@ class KnowledgeBaseAgent:
         # 1. Parse query
         parsed = self._parser.parse(question)
 
+        # 1.b Dynamic Alpha Routing
+        alpha = self._router.route_alpha(question)
+
         # 2. Retrieve evidence
-        evidence = self._retrieve(parsed.clean_query, parsed.metadata_filter, parsed.section_intent)
+        evidence = self._retrieve(parsed.clean_query, parsed.metadata_filter, parsed.section_intent, alpha=alpha)
 
         # 3. Judge retrieval quality → retry if needed
         if self._should_retry(evidence) and parsed.query_variants:
             variant = parsed.query_variants[0]
-            retry_evidence = self._retrieve(variant, parsed.metadata_filter, parsed.section_intent)
+            retry_evidence = self._retrieve(variant, parsed.metadata_filter, parsed.section_intent, alpha=alpha)
             if self._avg_score(retry_evidence) > self._avg_score(evidence):
                 evidence = retry_evidence
 
         # 4. Early exit if no evidence
         if not evidence:
-            return RAGResponse.insufficient(
+            resp = RAGResponse.insufficient(
                 "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
             )
+            resp.alpha = alpha
+            resp.debug_chunks = []
+            return resp
 
         # 5. Build prompt
         prompt = self._augmentor.build_prompt(question, evidence)
@@ -100,11 +117,38 @@ class KnowledgeBaseAgent:
         try:
             raw_response = self._generate(prompt)
             response = self._parse_llm_output(raw_response)
+            response.debug_chunks = evidence
+            response.alpha = alpha
         except Exception as e:
             return RAGResponse(
                 answer=f"Lỗi khi xử lý câu hỏi: {e}",
                 status=RAGStatus.INSUFFICIENT,
             )
+
+        # 6b. Extract accurate titles from grounding evidence for Disambiguation
+        if response.status == RAGStatus.INSUFFICIENT:
+            unique_ids = set()
+            for cit in response.citations:
+                clean_cit = cit.strip("[]")
+                parts = clean_cit.split("|")
+                if parts and parts[0] and parts[0] != "insufficient":
+                    unique_ids.add(parts[0])
+            
+            id_to_title = {}
+            for chunk in evidence:
+                meta = chunk.get("metadata", {})
+                mid = meta.get("ma_thu_tuc") or meta.get("doc_id")
+                title = meta.get("ten_thu_tuc")
+                if mid and title:
+                    id_to_title[mid] = title
+            
+            real_suggestions = []
+            for uid in unique_ids:
+                real_suggestions.append({
+                    "ma_thu_tuc": uid,
+                    "ten_thu_tuc": id_to_title.get(uid, f"Thủ tục {uid}")
+                })
+            response.suggested_procedures = real_suggestions
 
         # 7. Self-check (Tier 1 always, Tier 2 conditional)
         query_context = {
@@ -125,14 +169,15 @@ class KnowledgeBaseAgent:
         metadata_filter: dict[str, str] | None = None,
         section_intent: str | None = None,
         top_k: int = 5,
+        alpha: float = 0.5,
     ) -> list[dict[str, Any]]:
         """Run hybrid search with optional metadata filters and section boosting."""
         if metadata_filter or section_intent:
             return self.store.search_with_filter(
                 query, metadata_filter=metadata_filter, top_k=top_k,
-                section_intent=section_intent,
+                section_intent=section_intent, alpha=alpha,
             )
-        return self.store.search(query, top_k=top_k)
+        return self.store.search(query, top_k=top_k, alpha=alpha)
 
     def _should_retry(self, evidence: list[dict]) -> bool:
         """Judge if retrieval quality is sufficient."""

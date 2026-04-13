@@ -16,13 +16,13 @@ class Augmentor:
     """Build structured prompts from retrieved evidence for grounded generation."""
 
     DEFAULT_TOKEN_BUDGET = 12000  # conservative for gpt-5.4-mini (400k context)
-
     SYSTEM_PROMPT = (
         "Bạn là trợ lý hành chính chuyên về Thủ tục Hành chính Việt Nam.\n"
         "CHỈ trả lời dựa trên context được cung cấp bên dưới.\n"
         "Mỗi claim quan trọng PHẢI có citation dạng [mã_thủ_tục|tên_section].\n"
-        "Nếu có nhiều nguồn mâu thuẫn, ưu tiên nguồn mới hơn và ghi chú xung đột.\n"
-        "Nếu không đủ dữ liệu để trả lời, set status='insufficient'.\n"
+        "QUAN TRỌNG: Nếu context chứa nhiều thủ tục khác nhau (nhiều mã_thủ_tục) mà câu hỏi chung chung, BẠN KHÔNG ĐƯỢC trộn lẫn dữ liệu. "
+        "Hãy liệt kê các mã thủ tục tìm thấy vào phần `answer`, điền `ma_thu_tuc='insufficient'`, để trống các `facts` khác, điền các mã thủ tục vào `citations` và set `status='insufficient'`.\n"
+        "Nếu không có dữ liệu, set `status='insufficient'`.\n"
         "Trả lời bằng JSON theo output_schema."
     )
 
@@ -38,7 +38,7 @@ class Augmentor:
             "can_cu_phap_ly": ["..."],
         },
         "citations": ["[mã|section]"],
-        "status": "grounded | insufficient | conflict",
+        "status": "grounded | insufficient | conflict"
     }, ensure_ascii=False, indent=2)
 
     def __init__(self, token_budget: int = DEFAULT_TOKEN_BUDGET) -> None:
