@@ -78,12 +78,12 @@ class KnowledgeBaseAgent:
         parsed = self._parser.parse(question)
 
         # 2. Retrieve evidence
-        evidence = self._retrieve(parsed.clean_query, parsed.metadata_filter)
+        evidence = self._retrieve(parsed.clean_query, parsed.metadata_filter, parsed.section_intent)
 
         # 3. Judge retrieval quality → retry if needed
         if self._should_retry(evidence) and parsed.query_variants:
             variant = parsed.query_variants[0]
-            retry_evidence = self._retrieve(variant, parsed.metadata_filter)
+            retry_evidence = self._retrieve(variant, parsed.metadata_filter, parsed.section_intent)
             if self._avg_score(retry_evidence) > self._avg_score(evidence):
                 evidence = retry_evidence
 
@@ -123,12 +123,14 @@ class KnowledgeBaseAgent:
         self,
         query: str,
         metadata_filter: dict[str, str] | None = None,
+        section_intent: str | None = None,
         top_k: int = 5,
     ) -> list[dict[str, Any]]:
-        """Run hybrid search with optional metadata filters."""
-        if metadata_filter:
+        """Run hybrid search with optional metadata filters and section boosting."""
+        if metadata_filter or section_intent:
             return self.store.search_with_filter(
                 query, metadata_filter=metadata_filter, top_k=top_k,
+                section_intent=section_intent,
             )
         return self.store.search(query, top_k=top_k)
 

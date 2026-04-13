@@ -305,37 +305,61 @@ class EmbeddingStore:
         query: str,
         metadata_filter: dict | None = None,
         top_k: int = 5,
+        section_intent: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Hybrid search with metadata pre-filtering on the vector side.
+        """Hybrid search with metadata pre-filtering and optional section re-ranking.
 
-        The metadata_filter dict may contain keys like 'ma_thu_tuc' or 'doc_id'.
-        For Weaviate, this becomes a Filter.by_property("doc_id").equal(...).
-        BM25 results are also filtered in-memory to the same doc_id.
+        Args:
+            query: User query text.
+            metadata_filter: Dict with keys like 'ma_thu_tuc' or 'doc_id'.
+            top_k: Number of results to return.
+            section_intent: If provided, boost chunks whose section_type matches.
         """
         if not metadata_filter:
-            return self.search(query, top_k)
+            results = self.search(query, top_k * 2 if section_intent else top_k)
+            return self._rerank_by_section(results, section_intent, top_k)
 
         doc_id_val = metadata_filter.get("ma_thu_tuc") or metadata_filter.get("doc_id")
         if not doc_id_val:
-            return self.search(query, top_k)
+            results = self.search(query, top_k * 2 if section_intent else top_k)
+            return self._rerank_by_section(results, section_intent, top_k)
+
+        # Over-fetch to have more candidates for section re-ranking
+        fetch_k = top_k * 3 if section_intent else top_k
 
         # --- Vector search with filter ---
         if self._backend == "weaviate":
             from weaviate.classes.query import Filter
             wv_filter = Filter.by_property("doc_id").equal(doc_id_val)
-            vector_results = self._vector_search_weaviate(query, top_k, filters=wv_filter)
+            vector_results = self._vector_search_weaviate(query, fetch_k, filters=wv_filter)
         elif self._backend == "memory":
             filtered = [r for r in self._store
                         if r["metadata"].get("doc_id") == doc_id_val
                         or r["metadata"].get("ma_thu_tuc") == doc_id_val]
-            vector_results = self._vector_search_memory(query, filtered, top_k)
+            vector_results = self._vector_search_memory(query, filtered, fetch_k)
         else:
-            # ChromaDB / other — fall back to unfiltered vector
-            vector_results = self._vector_search_chroma(query, top_k)
+            vector_results = self._vector_search_chroma(query, fetch_k)
 
         # --- BM25 search restricted to same doc_id ---
-        bm25_results = self._bm25_search_filtered(query, doc_id_val, top_k)
-        return self._hybrid_fuse(vector_results, bm25_results, top_k)
+        bm25_results = self._bm25_search_filtered(query, doc_id_val, fetch_k)
+        fused = self._hybrid_fuse(vector_results, bm25_results, fetch_k)
+
+        return self._rerank_by_section(fused, section_intent, top_k)
+
+    def _rerank_by_section(
+        self, results: list[dict], section_intent: str | None, top_k: int,
+    ) -> list[dict[str, Any]]:
+        """Re-rank results to prioritize chunks matching the target section_intent.
+
+        Chunks whose section_type matches intent are moved to the front (stable order),
+        followed by the rest.  Final list is cut to top_k.
+        """
+        if not section_intent or not results:
+            return results[:top_k]
+
+        matching = [r for r in results if r.get("metadata", {}).get("section_type") == section_intent]
+        others = [r for r in results if r.get("metadata", {}).get("section_type") != section_intent]
+        return (matching + others)[:top_k]
 
     def get_collection_size(self) -> int:
         if self._backend == "weaviate":

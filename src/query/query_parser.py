@@ -45,14 +45,15 @@ _AGENCY_MAP: dict[str, str] = {
 }
 
 # Intent keywords → canonical section type
+# Longer phrases are weighted higher to avoid false matches from short generic words.
 _INTENT_KEYWORDS: dict[str, list[str]] = {
-    "phi_le_phi": ["phí", "lệ phí", "chi phí", "miễn phí", "giá"],
-    "thoi_han_giai_quyet": ["thời hạn", "bao lâu", "ngày", "thời gian giải quyết"],
-    "thanh_phan_ho_so": ["hồ sơ", "giấy tờ", "thành phần", "đơn", "tờ khai", "nộp gì"],
-    "can_cu_phap_ly": ["căn cứ", "pháp lý", "nghị định", "thông tư", "luật", "quyết định"],
-    "trinh_tu_thuc_hien": ["trình tự", "các bước", "quy trình", "thủ tục", "cách làm"],
+    "phi_le_phi": ["phí", "lệ phí", "chi phí", "miễn phí", "giá", "tốn bao nhiêu"],
+    "thoi_han_giai_quyet": ["thời hạn", "bao lâu", "thời gian giải quyết", "mất bao lâu"],
+    "thanh_phan_ho_so": ["hồ sơ", "giấy tờ", "thành phần", "tờ khai", "nộp gì", "cần nộp"],
+    "can_cu_phap_ly": ["căn cứ", "pháp lý", "nghị định", "thông tư", "căn cứ pháp lý", "luật nào", "văn bản pháp luật"],
+    "trinh_tu_thuc_hien": ["trình tự", "các bước", "quy trình", "cách làm", "trình tự thực hiện"],
     "cach_thuc_thuc_hien": ["cách thức", "nộp online", "trực tuyến", "bưu chính", "nộp trực tiếp"],
-    "co_quan_thuc_hien": ["cơ quan", "đơn vị", "ai thực hiện", "nơi nộp"],
+    "co_quan_thuc_hien": ["cơ quan nào", "cơ quan", "đơn vị nào", "đơn vị", "ai thực hiện", "nơi nộp", "nộp ở đâu"],
     "doi_tuong_thuc_hien": ["đối tượng", "ai được", "ai có thể"],
     "yeu_cau_dieu_kien": ["yêu cầu", "điều kiện"],
     "ket_qua_thuc_hien": ["kết quả", "được cấp", "giấy phép"],
@@ -112,14 +113,22 @@ class QueryParser:
         )
 
     def _detect_intent(self, lower_query: str) -> str | None:
-        """Detect the most likely section intent from keywords."""
+        """Detect the most likely section intent from keywords.
+
+        Uses weighted scoring: longer keyword matches score higher,
+        preventing short generic words from overriding specific phrases.
+        """
         best_intent: str | None = None
-        best_count = 0
+        best_score = 0.0
 
         for intent, keywords in _INTENT_KEYWORDS.items():
-            count = sum(1 for kw in keywords if kw in lower_query)
-            if count > best_count:
-                best_count = count
+            score = 0.0
+            for kw in keywords:
+                if kw in lower_query:
+                    # Weight by keyword length — longer = more specific = higher weight
+                    score += len(kw)
+            if score > best_score:
+                best_score = score
                 best_intent = intent
 
         return best_intent

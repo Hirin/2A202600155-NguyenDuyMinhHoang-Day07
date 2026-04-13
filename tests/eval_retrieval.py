@@ -90,16 +90,19 @@ def evaluate_retrieval(
         expected_ma = q.get("expected_ma_thu_tuc")
         expected_sec = q.get("expected_section")
 
-        # Extract metadata filter if parser available
+        # Extract metadata filter and section intent if parser available
         meta_filter = {}
+        section_intent = None
         if parser:
             parsed = parser.parse(query_text)
             meta_filter = parsed.metadata_filter
+            section_intent = parsed.section_intent
 
         # Search
-        if meta_filter:
+        if meta_filter or section_intent:
             search_results = store.search_with_filter(
                 query_text, metadata_filter=meta_filter, top_k=top_k,
+                section_intent=section_intent,
             )
             n_with_filter += 1
             total_filter_prec += filter_precision(search_results, meta_filter)

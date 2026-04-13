@@ -116,12 +116,14 @@ class TTHCSectionChunker:
         parent_content: str,
         base_meta: dict,
     ) -> list[ParentChildChunk]:
-        """Split text into overlapping child chunks."""
+        """Split text into overlapping child chunks with sub-section detection."""
         children: list[ParentChildChunk] = []
         step = self.child_max_chars - self.child_overlap
 
         if step <= 0:
             step = self.child_max_chars
+
+        parent_section = base_meta.get("section_type", "")
 
         idx = 0
         for start in range(0, len(text), step):
@@ -131,12 +133,18 @@ class TTHCSectionChunker:
             if not child_text:
                 continue
 
+            # Detect if child content belongs to a different sub-section
+            detected = self._detect_subsection(child_text)
+            child_meta = {**base_meta, "child_index": idx}
+            if detected and detected != parent_section:
+                child_meta["section_type"] = detected
+
             children.append(ParentChildChunk(
                 chunk_id=f"{parent_id}__c{idx}",
                 parent_id=parent_id,
                 content=child_text,
                 parent_content=parent_content,
-                metadata={**base_meta, "child_index": idx},
+                metadata=child_meta,
                 is_parent=False,
             ))
             idx += 1
@@ -145,3 +153,39 @@ class TTHCSectionChunker:
                 break
 
         return children
+
+    @staticmethod
+    def _detect_subsection(text: str) -> str | None:
+        """Detect the dominant sub-section type from chunk content.
+
+        Scans the first 300 chars for known section keywords (from SECTION_MAP).
+        Also detects legal reference tables (decree numbers, 'Số ký hiệu') as
+        can_cu_phap_ly even without explicit headings.
+
+        Returns the canonical section key if a strong match is found,
+        giving priority to keywords appearing earliest in the text.
+        """
+        import re as _re
+        from ..parsing.section_map import SECTION_MAP
+
+        lower = text[:300].lower()
+        best_key: str | None = None
+        best_pos = len(lower) + 1
+
+        for heading, canonical in SECTION_MAP.items():
+            pos = lower.find(heading)
+            if pos != -1 and pos < best_pos:
+                best_pos = pos
+                best_key = canonical
+
+        # Detect legal reference table patterns (e.g. "42/2024/QH15", "Số ký hiệu")
+        # Scan full text since legal refs often appear in the latter half of merged chunks
+        if best_key is None:
+            full_lower = text.lower()
+            if "số ký hiệu" in full_lower or "ngày ban hành" in full_lower or "cơ quan ban hành" in full_lower:
+                best_key = "can_cu_phap_ly"
+            elif _re.search(r"\d+/\d{4}/[a-zđ]+-[a-zđ]+", full_lower):
+                best_key = "can_cu_phap_ly"
+
+        return best_key
+
