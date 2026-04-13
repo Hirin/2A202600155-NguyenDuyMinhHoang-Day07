@@ -94,10 +94,16 @@ class EmbeddingStore:
         import weaviate
         from weaviate.classes.init import Auth
 
-        self._weaviate_client = weaviate.connect_to_weaviate_cloud(
-            cluster_url=url,
-            auth_credentials=Auth.api_key(api_key),
-        )
+        if api_key:
+            self._weaviate_client = weaviate.connect_to_weaviate_cloud(
+                cluster_url=url,
+                auth_credentials=Auth.api_key(api_key),
+            )
+        else:
+            self._weaviate_client = weaviate.connect_to_local(
+                host="localhost",
+                port=8080
+            )
         class_name = self._collection_name
         self._weaviate_class = class_name
         if not self._weaviate_client.collections.exists(class_name):
@@ -188,6 +194,14 @@ class EmbeddingStore:
                 embed = self._embedding_fn(doc.content)
                 meta = dict(doc.metadata)
                 meta["doc_id"] = doc.id
+                
+                # ChromaDB only accepts str, int, float, bool.
+                for k in list(meta.keys()):
+                    if meta[k] is None:
+                        del meta[k]
+                    elif isinstance(meta[k], (dict, list)):
+                        meta[k] = json.dumps(meta[k], ensure_ascii=False)
+                        
                 ids.append(f"{doc.id}__{len(ids)}")
                 documents.append(doc.content)
                 embeddings.append(embed)
