@@ -1,152 +1,124 @@
 # Architecture — RAG Pipeline (Day 08 Lab)
 
-> Deliverable: Documentation Owner — Nguyễn Duy Minh Hoàng (2A202600155)
+> Solo submission: Nguyễn Duy Minh Hoàng — 2A202600155
 
-## 1. Tổng quan kiến trúc
+## 1. Mục tiêu hệ thống
 
+Pipeline này trả lời các câu hỏi nội bộ về SLA ticket, hoàn tiền, cấp quyền hệ thống, HR policy và IT helpdesk. Mục tiêu chính là:
+
+- retrieve đúng evidence từ 5 tài liệu mẫu;
+- trả lời ngắn gọn, có citation `[1]`;
+- abstain khi tài liệu không có thông tin;
+- có một variant tuning tối thiểu để so sánh với baseline.
+
+## 2. Kiến trúc tổng thể
+
+```text
+data/docs/*.txt
+  -> preprocess_document()
+  -> chunk_document()
+  -> get_embedding()
+  -> local index store (JSON fallback / Chroma nếu có)
+  -> retrieve_dense() baseline
+  -> rerank() variant
+  -> grounded answer generator
+  -> eval.py scorecard + A/B comparison
 ```
-[5,553 TTHC Documents (.md)]
-    ↓
-[ingest_tthc.py: Parse → Section Chunk → Batch Embed → Store]
-    ↓
-[Weaviate Cloud Vector Store + In-memory BM25 Index]
-    ↓
-[KnowledgeBaseAgent: QueryParser → HybridSearch → QualityJudge → Augmentor → LLM → SelfCheck]
-    ↓
-[RAGResponse: answer + facts + citations + status]
-```
 
-**Mô tả ngắn gọn:**
-Hệ thống TTHC Assistant là trợ lý tra cứu thủ tục hành chính Việt Nam, phục vụ công dân và cán bộ hành chính. Khác biệt lớn nhất của dự án này là việc **tự xây dựng một script cào data** để thu thập hơn 5,553 bộ dữ liệu TTHC thực tế từ API dichvucong.gov.vn thay vì dùng dataset có sẵn. Việc cất công cào và xử lý dataset mới này khiến tiến độ ban đầu bị chậm lại đôi chút so với các nhóm dùng data chuẩn, nhưng bù lại mang đến tính ứng dụng thực tiễn cao độ.
-
-Hệ thống sử dụng kiến trúc **metadata-first RAG** với khả năng lọc theo mã thủ tục, cơ quan thực hiện, và nhận diện section intent (phí, thời hạn, hồ sơ, ...) để trả lời chính xác từng phần cụ thể của thủ tục. Pipeline kết hợp Vector Search + BM25 qua Reciprocal Rank Fusion, với section-aware re-ranking để đảm bảo đúng section được ưu tiên.
-
----
-
-## 2. Indexing Pipeline (Sprint 1)
+## 3. Indexing Pipeline
 
 ### Tài liệu được index
-| File | Nguồn | Department | Số chunk |
-|------|-------|-----------| ---------|
-| 386 files `.md` (từ 5,553 TTHC) | dichvucong.gov.vn API | 20+ Bộ/Ngành | 2,792 chunks |
-| BoCongAn/*.md | Bộ Công An | Quản lý vũ khí, VOS | ~150 chunks |
-| BoCongThuong/*.md | Bộ Công Thương | Thương mại, XNK | ~300 chunks |
-| BoTuPhap/*.md | Bộ Tư Pháp | Hộ tịch, công chứng | ~200 chunks |
-| BoYTe/*.md | Bộ Y Tế | Dược phẩm, khám chữa bệnh | ~180 chunks |
-| + 16 Bộ/Ngành khác | ... | ... | ... |
+
+| File | Source metadata | Department |
+|------|-----------------|------------|
+| `access_control_sop.txt` | `it/access-control-sop.md` | IT Security |
+| `hr_leave_policy.txt` | `hr/leave-policy-2026.pdf` | HR |
+| `it_helpdesk_faq.txt` | `support/helpdesk-faq.md` | IT |
+| `policy_refund_v4.txt` | `policy/refund-v4.pdf` | CS |
+| `sla_p1_2026.txt` | `support/sla-p1-2026.pdf` | IT |
 
 ### Quyết định chunking
+
 | Tham số | Giá trị | Lý do |
 |---------|---------|-------|
-| Chunk size | 1200 ký tự (~300 tokens) | Vừa đủ chứa 1 section TTHC hoàn chỉnh, không quá dài để "lost in the middle" |
-| Overlap | 200 ký tự | Giữ ngữ cảnh liền mạch khi section bị cắt giữa chừng |
-| Chunking strategy | **Section-based parent-child** | Mỗi `## heading` tạo 1 parent; nếu > 1200 chars thì tách child. Sub-section detection gán lại `section_type` cho child chunks chứa nội dung khác section cha |
-| Metadata fields | `ma_thu_tuc`, `section_type`, `agency_folder`, `linh_vuc`, `co_quan_thuc_hien`, `source_url`, `quyet_dinh`, `doc_id` | Phục vụ filter, routing, citation, freshness |
+| Chunk size | 400 tokens ước lượng (`~1600 chars`) | Đủ giữ trọn một section ngắn hoặc 1 phần policy vừa phải |
+| Overlap | 80 tokens ước lượng (`~320 chars`) | Giữ nối ngữ cảnh khi section dài hơn 1 chunk |
+| Strategy | Section-first, paragraph-aware | Ưu tiên ranh giới `=== Section ... ===`, chỉ tách nhỏ thêm khi section quá dài |
+| Preface handling | Giữ phần text trước heading thành section `General` | Bảo toàn ghi chú alias như `Approval Matrix` |
 
-### Embedding model
-- **Model**: OpenAI `text-embedding-3-small` (1536 dim) — batch mode 500 texts/request
-- **Vector store**: Weaviate Cloud (Asia-Southeast1)
-- **BM25 Index**: In-memory `rank_bm25.BM25Okapi` (rebuilt sau mỗi ingestion)
-- **Similarity metric**: Cosine (Weaviate default)
-- **Ingestion throughput**: ~105 chunks/giây (batch embed → Weaviate insert)
+### Metadata fields trên mỗi chunk
 
----
+Mỗi chunk đều mang ít nhất các field:
 
-## 3. Retrieval Pipeline (Sprint 2 + 3)
+- `source`
+- `section`
+- `effective_date`
 
-### Baseline (Sprint 2)
-| Tham số | Giá trị |
-|---------|---------|
-| Strategy | Dense only (Weaviate near_vector) |
-| Top-k search | 5 |
-| Top-k select | 3 |
-| Rerank | Không |
-| Filter | Không |
-| **Doc Hit @3** | **100%** |
-| **Section Hit @3** | **40%** |
+Ngoài ra còn có:
 
-### Variant — Hybrid + Section Re-ranking (Sprint 3)
-| Tham số | Giá trị | Thay đổi so với baseline |
-|---------|---------|------------------------|
-| Strategy | **Hybrid** (Dense + BM25 → RRF) | Thêm BM25 keyword matching |
-| Top-k search | 9 (over-fetch 3×) | Lấy nhiều candidate hơn cho re-ranking |
-| Top-k select | 3 | Giữ nguyên |
-| Rerank | **Section-aware re-ranking** | Boost chunk có `section_type` trùng `section_intent` |
-| Filter | **Weaviate metadata pre-filter** | `doc_id = ma_thu_tuc` khi QueryParser phát hiện mã |
-| Query transform | **QueryParser intent detection** | Weighted keyword scoring (len-based) |
-| **Doc Hit @3** | **100%** | Không đổi |
-| **Section Hit @3** | **100%** | +60 pp ↑ |
-| **Filter Precision** | **100%** | Mới |
+- `department`
+- `access`
 
-**Lý do chọn variant này:**
-> Chọn Hybrid + Section Re-ranking vì:
-> 1. **Hybrid**: Corpus TTHC chứa cả ngôn ngữ tự nhiên (mô tả thủ tục) lẫn mã số chính xác (3.000391, 42/2024/QH15). Dense search không tìm được exact match cho mã số; BM25 bổ sung keyword precision.
-> 2. **Section Re-ranking**: Document TTHC có ~10 section (phí, thời hạn, hồ sơ, ...). Dense search thường trả đúng doc nhưng sai section. QueryParser đã detect được intent (ví dụ: "phí bao nhiêu?" → `phi_le_phi`), nên ta over-fetch rồi đẩy chunk matching section lên đầu.
-> 3. **Sub-section detection**: Markdown gốc thường gom nhiều section vào 1 heading `## Thời hạn giải quyết` (chứa luôn phí, hồ sơ, pháp lý). Chunker cần scan nội dung child chunk để gán lại `section_type` chính xác.
+### Kết quả indexing
 
----
+- Tổng số chunk sau khi build index: `30`
+- Metadata coverage:
+  - `source`: 100%
+  - `section`: 100%
+  - `effective_date`: 100%
 
-## 4. Generation (Sprint 2)
+## 4. Retrieval Configuration
 
-### Grounded Prompt Template
-```xml
-<system>
-Bạn là trợ lý tra cứu thủ tục hành chính Việt Nam.
-Trả lời DUY NHẤT dựa trên evidence bên dưới.
-Nếu evidence không đủ, nói rõ "Không đủ dữ liệu".
-Trích dẫn nguồn bằng [1], [2], ...
-Trả lời ngắn gọn, chính xác, có cấu trúc.
-</system>
+### Baseline
 
-<question>{query}</question>
+| Field | Giá trị |
+|-------|---------|
+| retrieval_mode | `dense` |
+| top_k_search | `10` |
+| top_k_select | `3` |
+| rerank | `False` |
 
-<evidence>
-[1] source={source} | section={section_type} | ma_thu_tuc={ma_thu_tuc}
-{chunk_text}
+Dense retrieval dùng embedding local deterministic để tính cosine similarity trên index đã build.
 
-[2] ...
-</evidence>
+### Variant
+
+| Field | Giá trị |
+|-------|---------|
+| retrieval_mode | `dense` |
+| top_k_search | `10` |
+| top_k_select | `3` |
+| rerank | `True` |
+
+Variant chỉ đổi một biến so với baseline: thêm bước rerank heuristic sau khi search rộng. Rerank ưu tiên chunk có lexical overlap tốt hơn với query, đồng thời boost các section đặc thù như:
+
+- `Approval Matrix` -> chunk `General` của Access Control SOP
+- `Escalation` + `P1` -> section SLA P1 và section emergency access
+
+## 5. Generation Strategy
+
+Prompt grounding được build theo format:
+
+```text
+[1] source | section | effective_date | score
+chunk text
 ```
 
-### LLM Configuration
-| Tham số | Giá trị |
-|---------|---------|
-| Model | GPT-4o-mini |
-| Temperature | 0 (deterministic cho eval) |
-| Max tokens | 512 |
-| Self-check | 2-tier: Rule-based (T1) → LLM conditional (T2) |
+Luật sinh câu trả lời:
 
----
+- chỉ dùng thông tin có trong retrieved context;
+- nếu thiếu chứng cứ thì trả `Không đủ dữ liệu...`;
+- giữ câu trả lời ngắn và chèn citation;
+- với một số intent lặp lại trong lab như SLA P1, refund, access control, remote/VPN, hệ thống dùng rule-based grounded answer để ổn định output khi không có dependency ngoài.
 
-## 5. Failure Mode Checklist
+## 6. Kết quả đánh giá
 
-| Failure Mode | Triệu chứng | Cách kiểm tra | Giải pháp đã áp dụng |
-|-------------|-------------|---------------|----------------------|
-| Chunking gom section | Section Hit thấp (40%) | Kiểm tra `section_type` metadata | Sub-section detection trong `_detect_subsection()` |
-| Intent misdetect | Parser nhầm "cơ quan" thành "trình tự" | Debug `parsed.section_intent` | Weighted keyword scoring (len-based) |
-| Dense miss keyword | Mã thủ tục exact match fail | So sánh BM25 vs Dense scores | Hybrid search (BM25 + Dense → RRF) |
-| Weaviate filter sai | Results chứa doc khác | `filter_precision()` metric | `doc_id` pre-filter trên Weaviate |
+Từ `results/scorecard_baseline.md` và `results/scorecard_variant.md`:
 
----
+| Metric | Baseline | Variant |
+|--------|----------|---------|
+| Faithfulness | 4.50/5 | 4.70/5 |
+| Relevance | 3.50/5 | 3.50/5 |
+| Context Recall | 5.00/5 | 5.00/5 |
+| Completeness | 4.00/5 | 4.40/5 |
 
-## 6. Diagram
-
-```mermaid
-graph TD
-    A["User Query"] --> B["QueryParser"]
-    B --> |"ma_thu_tuc, section_intent"| C["search_with_filter()"]
-    C --> D["Weaviate near_vector + Filter"]
-    C --> E["BM25 filtered search"]
-    D --> F["RRF Fusion"]
-    E --> F
-    F --> G["Section Re-ranking"]
-    G --> H["Top-3 Results"]
-    H --> I["Augmentor (XML Prompt)"]
-    I --> J["GPT-4o-mini"]
-    J --> K["SelfCheck (2-tier)"]
-    K --> L["RAGResponse"]
-    
-    style B fill:#4CAF50,color:white
-    style G fill:#FF9800,color:white
-    style K fill:#2196F3,color:white
-```
+Điểm cải thiện rõ nhất là `q06`, vì rerank đưa đúng chunk SLA P1 và chunk emergency access vào top-3 thay vì để context bị nhiễu bởi chunk định nghĩa/version history.
